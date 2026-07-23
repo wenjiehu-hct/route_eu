@@ -37,9 +37,8 @@ export function formatHours(seconds) {
   return `${(seconds / 3600).toFixed(1)} h`;
 }
 
-let idSeed = 1;
-
 export function createId(prefix = 'id') {
-  idSeed += 1;
-  return `${prefix}_${idSeed}`;
+  const random = globalThis.crypto?.randomUUID?.().replaceAll('-', '')
+    || `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  return `${prefix}_${random}`;
 }

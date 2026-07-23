@@ -75,7 +75,7 @@ export async function fetchRoadsInBbox(bbox, highwayTypes, options = {}) {
       };
     } catch (error) {
       lastError = error;
-      if (options.signal?.aborted) throw new Error('已取消道路查询。');
+      if (options.signal?.aborted) throw new Error('已取消道路查询。', { cause: error });
       if (!shouldRetry(error)) break;
       await delay(1200 * (attempt + 1), options.signal);
     }
@@ -107,7 +107,7 @@ async function postOverpass(endpoint, query, externalSignal) {
     return await response.json();
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(externalSignal?.aborted ? '已取消道路查询。' : 'Overpass 查询超时，请缩小范围后重试。');
+      throw new Error(externalSignal?.aborted ? '已取消道路查询。' : 'Overpass 查询超时，请缩小范围后重试。', { cause: error });
     }
     throw error;
   } finally {

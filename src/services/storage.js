@@ -52,7 +52,7 @@ export function loadGroups() {
         saveGroups(empty);
         return empty;
       }
-    } catch (error) {
+    } catch {
       // ignore parse error and continue fallback
     }
   }
@@ -67,7 +67,7 @@ export function loadGroups() {
         saveGroups(migrated);
         return migrated;
       }
-    } catch (error) {
+    } catch {
       // continue
     }
   }
