@@ -13,7 +13,7 @@ const { useRoutePlannerStore } = await import('../src/stores/useRoutePlannerStor
 const { useComplianceStore, normalizeProject } = await import('../src/stores/useComplianceStore.js');
 const { useCoveragePlannerStore, getCoverageDerived } = await import('../src/stores/useCoveragePlannerStore.js');
 const { COMPLIANCE_PROFILES, COMPLIANCE_SCENARIOS } = await import('../src/constants/compliance.js');
-const { analyzeRouteForProfile } = await import('../src/services/compliance.js');
+const { analyzeRouteForProfile, buildProjectCsv } = await import('../src/services/compliance.js');
 const { traversalToSegments } = await import('../src/services/coveragePlanner.js');
 
 const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -31,14 +31,26 @@ assert(useComplianceStore.getState().projects[0].routeIds.includes('route-test')
 const normalizedLegacy = normalizeProject({ id: 'legacy', name: 'Legacy project', profileId: 'eu_gsr_isa', routeIds: [] });
 assert(normalizedLegacy.phase === 'concept' && normalizedLegacy.priority === 'medium', 'Legacy project defaults were not migrated');
 assert(Array.isArray(normalizedLegacy.testRuns) && Array.isArray(normalizedLegacy.issues) && Array.isArray(normalizedLegacy.activities), 'Legacy project collections were not migrated');
-const testRun = useComplianceStore.getState().addTestRun(project.id, { name: 'Munich execution', routeId: 'route-test' });
-useComplianceStore.getState().updateTestRun(project.id, testRun.id, { status: 'completed', distance: 52.4 });
-const issue = useComplianceStore.getState().addIssue(project.id, { title: 'ISA sign mismatch', severity: 'high', routeId: 'route-test' });
+assert(Array.isArray(normalizedLegacy.regulatoryBaseline.references), 'Legacy project regulatory baseline was not migrated');
+const testRun = useComplianceStore.getState().addTestRun(project.id, { name: 'Munich execution', routeId: 'route-test', driver: 'Driver A', vehicle: 'Vehicle A', scenarioIds: ['isa_total_distance'] });
+for (const item of testRun.checklist) useComplianceStore.getState().toggleRunChecklist(project.id, testRun.id, item.id, true);
+assert(useComplianceStore.getState().projects[0].testRuns[0].status === 'ready', 'Preflight checklist did not make the run ready');
+useComplianceStore.getState().startTestRun(project.id, testRun.id);
+useComplianceStore.getState().setRunScenarioResult(project.id, testRun.id, 'isa_total_distance', { status: 'passed', notes: 'Completed on public roads' });
+useComplianceStore.getState().addRunCheckpoint(project.id, testRun.id, { label: 'Speed limit transition', lat: 48.1, lon: 11.5 });
+const issue = useComplianceStore.getState().createIssueFromRun(project.id, testRun.id, 'isa_total_distance', { title: 'ISA sign mismatch', severity: 'high' });
 useComplianceStore.getState().updateIssue(project.id, issue.id, { status: 'investigating' });
+useComplianceStore.getState().completeTestRun(project.id, testRun.id, { startOdometer: 1000, endOdometer: 1052.4 });
 const expandedProject = useComplianceStore.getState().projects.find(item => item.id === project.id);
 assert(expandedProject.testRuns[0].status === 'completed' && expandedProject.testRuns[0].distance === 52.4, 'Test run lifecycle failed');
+assert(expandedProject.testRuns[0].checkpoints.length === 1, 'Run checkpoint lifecycle failed');
+assert(expandedProject.results.isa_total_distance.status === 'passed' && expandedProject.results.isa_total_distance.sourceRunId === testRun.id, 'Completed run did not synchronize scenario results');
 assert(expandedProject.issues[0].status === 'investigating', 'Issue lifecycle failed');
 assert(expandedProject.activities.length >= 4, 'Project activity logging failed');
+const batchRuns = useComplianceStore.getState().addTestRuns(project.id, [{ name: 'Generated scenario run', routeId: 'route-test', scenarioIds: ['isa_urban'] }]);
+assert(batchRuns.length === 1 && useComplianceStore.getState().projects[0].testRuns.length === 2, 'Batch test plan generation failed');
+const csv = buildProjectCsv(useComplianceStore.getState().projects[0], useRoutePlannerStore.getState().groups.flatMap(group => group.routes));
+assert(csv.includes('Munich execution') && csv.includes('ISA sign mismatch'), 'Project CSV export omitted execution data');
 useCoveragePlannerStore.getState().configureForCompliance('eu_gsr_isa', project.id);
 const planner = useCoveragePlannerStore.getState();
 assert(planner.routeCount === 5 && planner.includeLinks && planner.complianceProjectId === project.id, 'Compliance planner configuration failed');

@@ -155,3 +155,20 @@ export function localSuggest(query) {
   }
   return results;
 }
+
+export async function remoteSuggest(query, { signal } = {}) {
+  const value = String(query || '').trim();
+  if (value.length < 3 || parseLatLon(value)) return [];
+  const cacheKey = `roadTestGeocode:${normalizeName(value)}`;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+    if (Array.isArray(cached)) return cached;
+  } catch { /* ignore cache failures */ }
+  const params = new URLSearchParams({ q: value, format: 'jsonv2', addressdetails: '1', limit: '6' });
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { signal, headers: { Accept: 'application/json', 'Accept-Language': navigator.language || 'zh-CN' } });
+  if (!response.ok) throw new Error(`地名搜索服务 HTTP ${response.status}`);
+  const data = await response.json();
+  const results = data.map(item => ({ name: item.name || item.display_name.split(',')[0], full: item.display_name, lat: Number(item.lat), lon: Number(item.lon), source: 'OpenStreetMap' })).filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lon));
+  try { sessionStorage.setItem(cacheKey, JSON.stringify(results)); } catch { /* ignore cache failures */ }
+  return results;
+}

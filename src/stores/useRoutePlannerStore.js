@@ -217,8 +217,10 @@ export const useRoutePlannerStore = create((set, get) => ({
       group.routes.unshift(route);
       saveGroups(groups);
       set({ groups, draft: emptyDraft(groups), draftPreview: { stats: null, warning: '', loading: false }, status: `已保存路线：${name}` });
+      return route;
     } catch (error) {
       set({ status: `保存路线失败：${error.message}` });
+      return null;
     }
   },
   addRoutesToGroup: (groupId, routes) => {
@@ -229,6 +231,11 @@ export const useRoutePlannerStore = create((set, get) => ({
     group.routes.unshift(...clone(routes));
     saveGroups(groups);
     set({ groups, status: `已批量保存 ${routes.length} 条路线到「${group.name}」。` });
+  },
+  replaceGroups: rawGroups => {
+    const groups = Array.isArray(rawGroups) && rawGroups.length ? clone(rawGroups) : [{ id: createId('group'), name: '默认分组', expanded: true, routes: [] }];
+    saveGroups(groups);
+    set({ groups, activeRouteId: null, draft: emptyDraft(groups), draftPreview: { stats: null, warning: '', loading: false }, status: `已恢复 ${groups.length} 个分组、${flattenRoutes(groups).length} 条路线。` });
   },
   updateRouteStopCoords: async (routeId, stopIndex, lat, lon) => {
     let groups = clone(get().groups);
@@ -295,7 +302,7 @@ export const useRoutePlannerStore = create((set, get) => ({
   },
   exportData: ({ pois = [], compliance = null } = {}) => {
     const routes = flattenRoutes(get().groups);
-    const payload = { version: 2, exportedAt: new Date().toISOString(), groups: clone(get().groups), pois: clone(pois), compliance: compliance ? clone(compliance) : null };
+    const payload = { version: 3, exportedAt: new Date().toISOString(), groups: clone(get().groups), pois: clone(pois), compliance: compliance ? clone(compliance) : null };
     downloadTextFile(JSON.stringify(payload, null, 2), `route-planner-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
     set({ status: `已备份 ${routes.length} 条路线、${pois.length} 个收藏点和 ${compliance?.projects?.length || 0} 个法规项目。` });
   },
@@ -305,7 +312,7 @@ export const useRoutePlannerStore = create((set, get) => ({
       try {
         const raw = JSON.parse(event.target.result);
         let groups;
-        if ((raw.version === 1 || raw.version === 2) && Array.isArray(raw.groups)) groups = raw.groups;
+        if ([1, 2, 3].includes(raw.version) && Array.isArray(raw.groups)) groups = raw.groups;
         else if (Array.isArray(raw)) groups = migrateImportedRoutes(raw);
         else throw new Error('文件格式不匹配');
         saveGroups(groups);
@@ -354,4 +361,3 @@ async function copyText(content) {
   textarea.value = content; textarea.style.position = 'fixed'; textarea.style.opacity = '0';
   document.body.appendChild(textarea); textarea.select(); document.execCommand('copy'); textarea.remove();
 }
-

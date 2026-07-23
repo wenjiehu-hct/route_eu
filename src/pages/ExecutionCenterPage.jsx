@@ -56,7 +56,7 @@ function OperationsSchedule({ runs, issues, routes }) {
   return <Card title="跨项目运营排期" subtitle="按日期汇总测试执行与问题关闭计划" actions={<span className="calendar-legend"><i className="run" /> 测试执行 <i className="issue" /> 问题节点</span>}>
     {!events.length ? <EmptyState title="还没有可展示的排期" description="为测试任务设置日期，或为问题设置计划关闭日期。" /> : <div className="schedule-table">
       <div className="schedule-head"><span>日期</span><span>类型</span><span>任务</span><span>项目</span><span>路线 / 上下文</span><span>负责人</span><span>状态</span></div>
-      {events.map(item => <div className="schedule-row" key={`${item.type}-${item.id}`}><time>{formatDate(item.date)}</time><span className={`schedule-type ${item.type}`}>{item.type === 'run' ? '道路测试' : '问题关闭'}</span><strong>{item.title}</strong><Link to={`/projects/${item.project.id}`}>{item.project.name}</Link><span>{item.route}</span><span>{item.owner}</span><StatusBadge value={item.status} labels={item.type === 'run' ? RUN_LABELS : ISSUE_LABELS} /></div>)}
+      {events.map(item => <div className="schedule-row" key={`${item.type}-${item.id}`}><time>{formatDate(item.date)}</time><span className={`schedule-type ${item.type}`}>{item.type === 'run' ? '道路测试' : '问题关闭'}</span>{item.type === 'run' ? <Link className="schedule-task-link" to={`/execution/${item.project.id}/${item.id}`}>{item.title}</Link> : <Link className="schedule-task-link" to={`/projects/${item.project.id}/issues`}>{item.title}</Link>}<Link to={`/projects/${item.project.id}`}>{item.project.name}</Link><span>{item.route}</span><span>{item.owner}</span><StatusBadge value={item.status} labels={item.type === 'run' ? RUN_LABELS : ISSUE_LABELS} /></div>)}
     </div>}
   </Card>;
 }

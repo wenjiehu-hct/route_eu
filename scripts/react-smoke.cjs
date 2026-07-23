@@ -52,34 +52,50 @@ app.whenReady().then(async () => {
     if (result.statCards !== 4) errors.push(`Expected 4 dashboard stat cards, found ${result.statCards}`);
     if (!result.hasDashboard) errors.push('Portfolio dashboard did not render');
     const interaction = await window.webContents.executeJavaScript(`(async () => {
+      const waitFor = async selector => {
+        for (let index = 0; index < 30; index += 1) {
+          if (document.querySelector(selector)) return true;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return false;
+      };
       document.querySelector('.topbar-actions .primary')?.click();
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const createPanelOpened = Boolean(document.querySelector('.create-project-panel'));
+      const createPanelOpened = await waitFor('.create-project-panel');
       document.querySelector('.create-project-panel .toolbar-row .button-primary')?.click();
-      await new Promise(resolve => setTimeout(resolve, 120));
-      const projectCreated = Boolean(document.querySelector('.project-command-strip'));
+      const projectCreated = await waitFor('.project-command-strip');
       document.querySelectorAll('.project-tabs button')[2]?.click();
-      await new Promise(resolve => setTimeout(resolve, 80));
+      await waitFor('.execution-panel');
       document.querySelector('.execution-panel .card-actions .button-primary')?.click();
-      await new Promise(resolve => setTimeout(resolve, 80));
-      const runCreated = Boolean(document.querySelector('.run-card'));
+      const runCreated = await waitFor('.run-card');
+      document.querySelector('.run-card footer a.button-primary')?.click();
+      const sessionOpened = await waitFor('.test-session-page');
+      let evidenceUploaded = false;
+      if (sessionOpened) {
+        const input = document.querySelector('.session-main .evidence-manager input[type="file"]');
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(['sample evidence'], 'sample.log', { type: 'text/plain' }));
+        Object.defineProperty(input, 'files', { value: transfer.files, configurable: true });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        evidenceUploaded = await waitFor('.session-main .evidence-files article');
+      }
+      window.history.back();
+      await waitFor('.project-tabs');
       document.querySelectorAll('.project-tabs button')[3]?.click();
-      await new Promise(resolve => setTimeout(resolve, 80));
+      await waitFor('.issues-panel');
       document.querySelector('.issues-panel .card-actions .button-primary')?.click();
-      await new Promise(resolve => setTimeout(resolve, 80));
-      const issueCreated = Boolean(document.querySelector('.issue-card'));
+      const issueCreated = await waitFor('.issue-card');
       document.querySelector('.platform-nav a[href="#/routes"]')?.click();
-      await new Promise(resolve => setTimeout(resolve, 400));
-      const routeCenterOpened = Boolean(document.querySelector('.route-assets-page'));
-      const routeMapMounted = Boolean(document.querySelector('.leaflet-container'));
+      const routeCenterOpened = await waitFor('.route-assets-page');
+      const routeMapMounted = await waitFor('.leaflet-container');
       document.querySelector('.platform-nav a[href="#/planning"]')?.click();
-      await new Promise(resolve => setTimeout(resolve, 250));
-      const planningOpened = Boolean(document.querySelector('.planning-page'));
-      return { createPanelOpened, projectCreated, runCreated, issueCreated, routeCenterOpened, routeMapMounted, planningOpened };
+      const planningOpened = await waitFor('.planning-page');
+      return { createPanelOpened, projectCreated, runCreated, sessionOpened, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
     if (!interaction.runCreated) errors.push('Test run creation failed');
+    if (!interaction.sessionOpened) errors.push('Live test session failed to open');
+    if (!interaction.evidenceUploaded) errors.push('IndexedDB evidence upload failed');
     if (!interaction.issueCreated) errors.push('Issue creation failed');
     if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
     if (!interaction.planningOpened) errors.push('Planning center failed to open');

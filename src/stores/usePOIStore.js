@@ -5,6 +5,8 @@ const STORAGE_KEY = 'routePlannerPOIs';
 
 export const usePOIStore = create((set, get) => ({
   pois: loadPOIs(),
+  mapPickEnabled: false,
+  setMapPickEnabled: mapPickEnabled => set({ mapPickEnabled }),
   addPOI: poi => commit(set, [...get().pois, { id: createId('poi'), visible: true, color: '#f59e0b', ...poi }]),
   updatePOI: (id, updates) => commit(set, get().pois.map(poi => poi.id === id ? { ...poi, ...updates } : poi)),
   removePOI: id => commit(set, get().pois.filter(poi => poi.id !== id)),
@@ -23,4 +25,3 @@ function commit(set, pois) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pois));
   set({ pois });
 }
-

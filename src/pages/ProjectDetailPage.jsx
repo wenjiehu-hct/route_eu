@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import ComplianceWorkbench from '../components/ComplianceWorkbench.jsx';
+import EvidenceManager from '../components/EvidenceManager.jsx';
 import { Button, Card, EmptyState, PageHeader, ProgressBar, StatusBadge } from '../components/ui.jsx';
 import { COMPLIANCE_SCENARIOS, getComplianceProfile } from '../constants/compliance.js';
+import { bestRouteForScenario } from '../services/compliance.js';
 import { flattenRoutes, formatDate, getProjectMetrics, relativeTime } from '../services/portfolio.js';
 import { formatKm } from '../services/utils.js';
 import { ISSUE_STATUSES, PRIORITIES, PROJECT_PHASES, PROJECT_STATUSES, RUN_STATUSES, useComplianceStore } from '../stores/useComplianceStore.js';
@@ -39,7 +41,7 @@ export default function ProjectDetailPage() {
   const setTab = value => navigate(`/projects/${project.id}/${value}`);
 
   return <div className="page-stack project-detail-page">
-    <PageHeader eyebrow={`${profile.type} · ${project.market}`} title={project.name} description={`${project.vehicle || '车型/版本待定义'} · ${project.owner || '负责人待指派'} · 更新于 ${formatDate(project.updatedAt)}`} actions={<><Button onClick={() => store.exportProject(project.id, routes)}>导出项目报告</Button><Button variant="primary" onClick={() => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); navigate('/planning/area'); }}>为项目规划路线</Button></>}>
+    <PageHeader eyebrow={`${profile.type} · ${project.market}`} title={project.name} description={`${project.vehicle || '车型/版本待定义'} · ${project.owner || '负责人待指派'} · 更新于 ${formatDate(project.updatedAt)}`} actions={<><Button onClick={() => store.exportProjectCsv(project.id, routes)}>导出执行 CSV</Button><Button onClick={() => store.exportProject(project.id, routes)}>导出项目报告</Button><Button variant="primary" onClick={() => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); navigate('/planning/area'); }}>为项目规划路线</Button></>}>
       <div className="header-badges"><StatusBadge value={project.status} labels={STATUS_LABELS} /><StatusBadge value={project.phase} labels={PHASE_LABELS} /><StatusBadge value={project.priority} labels={PRIORITY_LABELS} tone={project.priority === 'critical' ? 'red' : project.priority === 'high' ? 'amber' : 'neutral'} /></div>
     </PageHeader>
 
@@ -129,14 +131,30 @@ export function TestRunsPanel({ project, routes, store, compact = false }) {
   const profile = getComplianceProfile(project.profileId);
   const visibleRuns = project.testRuns.filter(run => filter === 'all' || run.status === filter);
   const add = () => { const run = store.addTestRun(project.id, { vehicle: project.vehicle, scenarioIds: profile.scenarios.slice(0, 3) }); setEditingId(run.id); };
-  return <Card className="execution-panel" title="测试执行计划" subtitle="把路线、车辆、驾驶员、场景和现场记录组织为可追踪任务" actions={<Button variant="primary" size={compact ? 'sm' : 'md'} onClick={add}>＋ 新建测试执行</Button>}>
+  const generate = () => {
+    if (!projectRoutes.length) return alert('请先为项目分配至少一条测试路线。');
+    const alreadyPlanned = new Set(project.testRuns.filter(run => !['completed', 'cancelled'].includes(run.status)).flatMap(run => run.scenarioIds));
+    const pending = profile.scenarios.filter(id => !['passed', 'not_applicable'].includes(project.results?.[id]?.status) && !alreadyPlanned.has(id));
+    if (!pending.length) return alert('所有未完成场景都已安排测试任务。');
+    const grouped = new Map();
+    pending.forEach((id, index) => {
+      const assignedId = project.results?.[id]?.routeId;
+      const recommended = assignedId ? projectRoutes.find(route => route.id === assignedId) : bestRouteForScenario(projectRoutes, id)?.route;
+      const route = recommended || projectRoutes[index % projectRoutes.length];
+      if (!grouped.has(route.id)) grouped.set(route.id, { route, scenarioIds: [] });
+      grouped.get(route.id).scenarioIds.push(id);
+    });
+    const date = new Date().toISOString().slice(0, 10);
+    store.addTestRuns(project.id, [...grouped.values()].map(({ route, scenarioIds }, index) => ({ name: `${route.name} · 场景任务 ${index + 1}`, routeId: route.id, date, vehicle: project.vehicle, scenarioIds })));
+  };
+  return <Card className="execution-panel" title="测试执行计划" subtitle="把路线、车辆、驾驶员、场景和现场记录组织为可追踪任务" actions={<><Button size={compact ? 'sm' : 'md'} onClick={generate}>按未完成场景生成计划</Button><Button variant="primary" size={compact ? 'sm' : 'md'} onClick={add}>＋ 新建测试执行</Button></>}>
     <div className="execution-toolbar"><div>{RUN_STATUSES.map(item => <button key={item.value} className={filter === item.value ? 'active' : ''} onClick={() => setFilter(item.value)}>{item.label}<span>{project.testRuns.filter(run => run.status === item.value).length}</span></button>)}<button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>全部<span>{project.testRuns.length}</span></button></div></div>
     {!visibleRuns.length ? <EmptyState icon="RUN" title="没有测试执行任务" description="创建任务并分配路线、驾驶员、车辆和测试场景。" action={<Button variant="primary" onClick={add}>创建首个任务</Button>} /> : <div className="run-list">
       {visibleRuns.map(run => <article key={run.id} className={`run-card ${editingId === run.id ? 'editing' : ''}`}>
         <header><div><time>{run.date || '日期待定'}</time><strong>{run.name}</strong><span>{projectRoutes.find(route => route.id === run.routeId)?.name || '路线待分配'} · {run.driver || '驾驶员待指派'}</span></div><StatusBadge value={run.status} labels={RUN_LABELS} /></header>
         <div className="run-summary"><span><small>车辆/版本</small><strong>{run.vehicle || project.vehicle || '未设置'}</strong></span><span><small>天气</small><strong>{run.weather || '未记录'}</strong></span><span><small>里程</small><strong>{run.distance ? `${run.distance} km` : '待回填'}</strong></span><span><small>测试场景</small><strong>{run.scenarioIds.length}</strong></span></div>
         {editingId === run.id && <RunEditor project={project} run={run} routes={projectRoutes} store={store} />}
-        <footer><Button size="sm" onClick={() => setEditingId(editingId === run.id ? null : run.id)}>{editingId === run.id ? '收起编辑' : '编辑任务'}</Button>{run.status === 'planned' && <Button size="sm" variant="primary" onClick={() => store.updateTestRun(project.id, run.id, { status: 'running' })}>开始执行</Button>}{run.status === 'running' && <Button size="sm" variant="primary" onClick={() => store.updateTestRun(project.id, run.id, { status: 'completed' })}>标记完成</Button>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除测试任务“${run.name}”？`)) store.deleteTestRun(project.id, run.id); }}>删除</Button></footer>
+        <footer><Link className="button button-primary button-sm" to={`/execution/${project.id}/${run.id}`}>{run.status === 'running' ? '进入现场会话' : '打开执行工作台'}</Link><Button size="sm" onClick={() => setEditingId(editingId === run.id ? null : run.id)}>{editingId === run.id ? '收起编辑' : '编辑任务'}</Button>{run.status === 'running' && <Button size="sm" onClick={() => store.pauseTestRun(project.id, run.id)}>暂停</Button>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除测试任务“${run.name}”？`)) store.deleteTestRun(project.id, run.id); }}>删除</Button></footer>
       </article>)}
     </div>}
   </Card>;
@@ -159,6 +177,7 @@ function RunEditor({ project, run, routes, store }) {
       <label className="field span-2"><span>现场记录</span><textarea rows="3" value={run.notes} onChange={event => update('notes', event.target.value)} placeholder="记录异常、数据包、真值采集和测试限制" /></label>
     </div>
     <div className="scenario-picker"><strong>本次执行场景</strong><div>{profile.scenarios.map(id => <label key={id}><input type="checkbox" checked={run.scenarioIds.includes(id)} onChange={() => toggleScenario(id)} /><span>{COMPLIANCE_SCENARIOS[id]?.name || id}</span></label>)}</div></div>
+    <EvidenceManager projectId={project.id} ownerType="run" ownerId={run.id} attachments={run.attachments} onChange={attachments => update('attachments', attachments)} />
   </div>;
 }
 
@@ -174,10 +193,10 @@ export function IssuesPanel({ project, routes, store, compact = false }) {
       {visible.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity)).map(issue => <article key={issue.id} className={`issue-card severity-border-${issue.severity}`}>
         <header><div><span className={`severity-label severity-${issue.severity}`}>{({ critical: '严重', high: '高', medium: '中', low: '低' })[issue.severity]}</span><strong>{issue.title}</strong></div><StatusBadge value={issue.status} labels={ISSUE_LABELS} /></header>
         <p>{issue.description || '尚未填写问题描述。'}</p>
-        <div className="issue-meta"><span>负责人：{issue.assignee || '未指派'}</span><span>路线：{projectRoutes.find(route => route.id === issue.routeId)?.name || '未关联'}</span><span>截止：{formatDate(issue.dueDate)}</span></div>
+        <div className="issue-meta"><span>负责人：{issue.assignee || '未指派'}</span><span>测试任务：{project.testRuns.find(run => run.id === issue.runId)?.name || '未关联'}</span><span>路线：{projectRoutes.find(route => route.id === issue.routeId)?.name || '未关联'}</span><span>截止：{formatDate(issue.dueDate)}</span></div>
         {issue.evidence && <div className="evidence-line"><strong>证据</strong><span>{issue.evidence}</span></div>}
         {editingId === issue.id && <IssueEditor project={project} issue={issue} routes={projectRoutes} store={store} />}
-        <footer><Button size="sm" onClick={() => setEditingId(editingId === issue.id ? null : issue.id)}>{editingId === issue.id ? '收起编辑' : '编辑问题'}</Button>{issue.status === 'resolved' && <Button size="sm" variant="primary" onClick={() => store.updateIssue(project.id, issue.id, { status: 'verified' })}>验证通过</Button>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除问题“${issue.title}”？`)) store.deleteIssue(project.id, issue.id); }}>删除</Button></footer>
+        <footer><Button size="sm" onClick={() => setEditingId(editingId === issue.id ? null : issue.id)}>{editingId === issue.id ? '收起编辑' : '编辑问题'}</Button>{issue.status === 'resolved' && <Button size="sm" variant="primary" onClick={() => { if (!issue.resolution.trim()) return alert('验证前请先填写解决方案或修复版本。'); store.updateIssue(project.id, issue.id, { status: 'verified' }); }}>验证通过</Button>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除问题“${issue.title}”？`)) store.deleteIssue(project.id, issue.id); }}>删除</Button></footer>
       </article>)}
     </div>}
   </Card>;
@@ -193,9 +212,14 @@ function IssueEditor({ project, issue, routes, store }) {
     <label className="field"><span>负责人</span><input value={issue.assignee} onChange={event => update('assignee', event.target.value)} /></label>
     <label className="field"><span>计划关闭日期</span><input type="date" value={issue.dueDate} onChange={event => update('dueDate', event.target.value)} /></label>
     <label className="field"><span>关联路线</span><select value={issue.routeId} onChange={event => update('routeId', event.target.value)}><option value="">未关联</option>{routes.map(route => <option key={route.id} value={route.id}>{route.name}</option>)}</select></label>
+    <label className="field"><span>关联测试任务</span><select value={issue.runId} onChange={event => update('runId', event.target.value)}><option value="">未关联</option>{project.testRuns.map(run => <option key={run.id} value={run.id}>{run.name}</option>)}</select></label>
     <label className="field"><span>关联场景</span><select value={issue.scenarioId} onChange={event => update('scenarioId', event.target.value)}><option value="">未关联</option>{profile.scenarios.map(id => <option key={id} value={id}>{COMPLIANCE_SCENARIOS[id]?.name || id}</option>)}</select></label>
     <label className="field span-2"><span>问题描述 / 复现步骤</span><textarea rows="4" value={issue.description} onChange={event => update('description', event.target.value)} /></label>
+    <label className="field span-2"><span>根因分析</span><textarea rows="3" value={issue.rootCause} onChange={event => update('rootCause', event.target.value)} placeholder="记录数据分析结论、触发条件和影响范围" /></label>
+    <label className="field span-2"><span>解决方案 / 软件版本</span><textarea rows="3" value={issue.resolution} onChange={event => update('resolution', event.target.value)} placeholder="记录修复措施、代码/标定/地图版本和回归范围" /></label>
+    <label className="field span-2"><span>验证结论</span><textarea rows="2" value={issue.verificationNotes} onChange={event => update('verificationNotes', event.target.value)} placeholder="记录复测任务、结果和关闭依据" /></label>
     <label className="field span-2"><span>证据索引</span><input value={issue.evidence} onChange={event => update('evidence', event.target.value)} placeholder="日志 ID、视频文件、问题单或云盘链接" /></label>
+    <div className="span-2"><EvidenceManager projectId={project.id} ownerType="issue" ownerId={issue.id} attachments={issue.attachments} onChange={attachments => update('attachments', attachments)} /></div>
   </div>;
 }
 

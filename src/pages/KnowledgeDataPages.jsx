@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { COMPLIANCE_SCENARIOS } from '../constants/compliance.js';
 import { flattenRoutes } from '../services/portfolio.js';
+import { exportEvidenceFilesToDirectory, getEvidenceSummary, importWorkspaceFromDirectory, verifyEvidenceMetadata } from '../services/evidenceStorage.js';
 import { useComplianceStore } from '../stores/useComplianceStore.js';
 import { usePOIStore } from '../stores/usePOIStore.js';
 import { useRoutePlannerStore } from '../stores/useRoutePlannerStore.js';
@@ -56,12 +57,21 @@ export function DataCenterPage() {
   const fileRef = useRef(null);
   const [storage, setStorage] = useState({ usage: 0, quota: 0, persisted: false });
   const [history, setHistory] = useState(() => loadBackupHistory());
+  const [evidence, setEvidence] = useState({ count: 0, bytes: 0, records: [] });
+  const [missingEvidence, setMissingEvidence] = useState([]);
+  const [directoryExporting, setDirectoryExporting] = useState(false);
   const routeIds = new Set(routes.map(route => route.id));
   const orphanRouteRefs = compliance.projects.reduce((sum, project) => sum + project.routeIds.filter(id => !routeIds.has(id)).length, 0);
   const orphanIssueRefs = compliance.projects.reduce((sum, project) => sum + project.issues.filter(issue => issue.routeId && !routeIds.has(issue.routeId)).length, 0);
   const dataBytes = new Blob([JSON.stringify({ groups, pois, projects: compliance.projects })]).size;
 
-  useEffect(() => { updateStorage(setStorage); }, []);
+  const evidenceMetadata = collectEvidenceMetadata(compliance.projects);
+  useEffect(() => {
+    updateStorage(setStorage);
+    getEvidenceSummary().then(setEvidence).catch(() => {});
+    verifyEvidenceMetadata(evidenceMetadata).then(setMissingEvidence).catch(() => {});
+  }, [compliance.projects.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const workspacePayload = () => ({ version: 3, exportedAt: new Date().toISOString(), groups, pois, compliance: { version: 3, activeProjectId: compliance.activeProjectId, projects: compliance.projects } });
   const exportBackup = () => {
     useRoutePlannerStore.getState().exportData({ pois, compliance: { version: 2, activeProjectId: compliance.activeProjectId, projects: compliance.projects } });
     const entry = { id: Date.now(), createdAt: new Date().toISOString(), projects: compliance.projects.length, routes: routes.length, pois: pois.length, size: dataBytes };
@@ -80,6 +90,26 @@ export function DataCenterPage() {
     event.target.value = '';
   };
   const requestPersistence = async () => { if (navigator.storage?.persist) { await navigator.storage.persist(); await updateStorage(setStorage); } };
+  const exportDirectory = async () => {
+    setDirectoryExporting(true);
+    try {
+      const result = await exportEvidenceFilesToDirectory(workspacePayload(), 'global-road-test');
+      alert(`已导出工作区和 ${result.count} 个证据附件。`);
+    } catch (error) { alert(error.message); }
+    finally { setDirectoryExporting(false); }
+  };
+  const restoreDirectory = async () => {
+    if ((routes.length || pois.length || compliance.projects.length) && !window.confirm('目录恢复会替换当前工作区并覆盖同 ID 的本机证据文件。建议先导出当前数据，是否继续？')) return;
+    try {
+      const result = await importWorkspaceFromDirectory();
+      const workspace = result.workspace;
+      useRoutePlannerStore.getState().replaceGroups(workspace.groups || []);
+      usePOIStore.getState().replacePOIs(workspace.pois || []);
+      useComplianceStore.getState().replaceState(workspace.compliance || {});
+      const summary = await getEvidenceSummary(); setEvidence(summary); setMissingEvidence(result.missing);
+      alert(`已恢复工作区和 ${result.restored} 个证据附件${result.missing.length ? `，${result.missing.length} 个附件缺失` : ''}。`);
+    } catch (error) { alert(`目录恢复失败：${error.message}`); }
+  };
   const repair = () => {
     compliance.projects.forEach(project => compliance.updateProjectById(project.id, { routeIds: project.routeIds.filter(id => routeIds.has(id)), issues: project.issues.map(issue => issue.routeId && !routeIds.has(issue.routeId) ? { ...issue, routeId: '' } : issue) }));
   };
@@ -87,16 +117,17 @@ export function DataCenterPage() {
   return <div className="page-stack data-page">
     <PageHeader eyebrow="DATA GOVERNANCE" title="数据与备份中心" description="当前版本无需数据库即可运行；这里负责完整备份、迁移、完整性检查和长期保存策略。" actions={<Button variant="primary" onClick={exportBackup}>导出完整备份</Button>} />
     <section className="stats-grid compact-stats">
-      <StatCard icon="DB" label="工作区数据量" value={formatBytes(dataBytes)} detail="项目、路线、属性和标记点" />
+      <StatCard icon="DB" label="结构化数据" value={formatBytes(dataBytes)} detail="项目、路线、属性和标记点" />
       <StatCard icon="RT" label="路线记录" value={routes.length} detail={`${groups.length} 个分组`} tone="violet" />
       <StatCard icon="PJ" label="项目记录" value={compliance.projects.length} detail={`${compliance.projects.reduce((sum, project) => sum + project.testRuns.length, 0)} 个测试执行`} tone="green" />
-      <StatCard icon="OK" label="数据完整性" value={orphanRouteRefs + orphanIssueRefs ? '需修复' : '正常'} detail={`${orphanRouteRefs + orphanIssueRefs} 个失效引用`} tone={orphanRouteRefs + orphanIssueRefs ? 'amber' : 'green'} />
+      <StatCard icon="EV" label="本机证据库" value={formatBytes(evidence.bytes)} detail={`${evidence.count} 个附件 · ${missingEvidence.length} 个缺失`} tone={missingEvidence.length ? 'amber' : 'green'} />
     </section>
 
     <div className="data-grid">
-      <Card title="完整工作区备份" subtitle="一个 JSON 文件包含路线、道路统计、项目、测试执行、问题和标记点">
+      <Card title="工作区备份" subtitle="JSON 适合快速迁移；目录归档可同时带走本机证据附件">
         <div className="backup-actions"><div className="backup-icon">JSON</div><div><strong>建议每次完成路线规划或道路测试后备份</strong><p>备份文件可保存到 OneDrive、企业网盘、Git LFS 或受控文档系统，并可在另一台设备完整恢复。</p></div></div>
-        <div className="toolbar-row"><Button variant="primary" onClick={exportBackup}>导出完整备份</Button><Button onClick={chooseImport}>导入并恢复</Button><input ref={fileRef} type="file" accept=".json" hidden onChange={importBackup} /></div>
+        <div className="toolbar-row"><Button variant="primary" onClick={exportBackup}>导出 JSON</Button><Button onClick={exportDirectory} disabled={directoryExporting}>{directoryExporting ? '正在导出…' : '导出工作区 + 证据目录'}</Button><Button onClick={chooseImport}>导入 JSON</Button><Button onClick={restoreDirectory}>从证据目录完整恢复</Button><input ref={fileRef} type="file" accept=".json" hidden onChange={importBackup} /></div>
+        <div className="backup-scope"><span><strong>JSON</strong>包含全部结构化数据和附件索引，不包含视频/日志文件内容</span><span><strong>目录归档</strong>包含 workspace.json、证据清单和 IndexedDB 中的附件原文件</span></div>
         <div className="notice notice-blue">当前状态：{status}</div>
       </Card>
 
@@ -106,8 +137,8 @@ export function DataCenterPage() {
         {!storage.persisted && <Button onClick={requestPersistence}>请求持久存储权限</Button>}
       </Card>
 
-      <Card title="数据完整性检查" subtitle="检测路线被删除后残留的项目引用">
-        <div className="integrity-list"><span><i className={orphanRouteRefs ? 'warn' : 'ok'}>{orphanRouteRefs ? '!' : '✓'}</i><div><strong>项目路线引用</strong><small>{orphanRouteRefs} 个失效路线引用</small></div></span><span><i className={orphanIssueRefs ? 'warn' : 'ok'}>{orphanIssueRefs ? '!' : '✓'}</i><div><strong>问题路线引用</strong><small>{orphanIssueRefs} 个失效路线引用</small></div></span><span><i className="ok">✓</i><div><strong>数据模型版本</strong><small>v2 · 支持项目组合与测试闭环</small></div></span></div>
+      <Card title="数据完整性检查" subtitle="检测路线、任务和证据文件之间的失效引用">
+        <div className="integrity-list"><span><i className={orphanRouteRefs ? 'warn' : 'ok'}>{orphanRouteRefs ? '!' : '✓'}</i><div><strong>项目路线引用</strong><small>{orphanRouteRefs} 个失效路线引用</small></div></span><span><i className={orphanIssueRefs ? 'warn' : 'ok'}>{orphanIssueRefs ? '!' : '✓'}</i><div><strong>问题路线引用</strong><small>{orphanIssueRefs} 个失效路线引用</small></div></span><span><i className={missingEvidence.length ? 'warn' : 'ok'}>{missingEvidence.length ? '!' : '✓'}</i><div><strong>证据附件内容</strong><small>{missingEvidence.length} 个索引找不到本机文件</small></div></span><span><i className="ok">✓</i><div><strong>数据模型版本</strong><small>v3 · 支持现场会话与证据附件</small></div></span></div>
         {!!(orphanRouteRefs + orphanIssueRefs) && <Button variant="primary" onClick={repair}>修复失效引用</Button>}
       </Card>
 
@@ -125,3 +156,10 @@ export function DataCenterPage() {
 function loadBackupHistory() { try { const value = JSON.parse(localStorage.getItem('roadTestStudio.backupHistory') || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } }
 async function updateStorage(setStorage) { const estimate = await navigator.storage?.estimate?.() || {}; const persisted = await navigator.storage?.persisted?.() || false; setStorage({ usage: estimate.usage || 0, quota: estimate.quota || 0, persisted }); }
 function formatBytes(value) { if (!value) return '0 KB'; if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`; return `${(value / 1024 / 1024).toFixed(1)} MB`; }
+function collectEvidenceMetadata(projects) {
+  return projects.flatMap(project => [
+    ...project.testRuns.flatMap(run => [...(run.attachments || []), ...Object.values(run.scenarioResults || {}).flatMap(result => result.attachments || [])]),
+    ...project.issues.flatMap(issue => issue.attachments || []),
+    ...Object.values(project.results || {}).flatMap(result => result.attachments || []),
+  ]).filter((item, index, values) => item?.id && values.findIndex(value => value.id === item.id) === index);
+}

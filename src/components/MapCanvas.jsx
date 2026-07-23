@@ -28,6 +28,7 @@ export default function MapCanvas() {
   const activeRouteId = useRoutePlannerStore(state => state.activeRouteId);
   const mapPickEnabled = useRoutePlannerStore(state => state.mapPickEnabled);
   const pois = usePOIStore(state => state.pois);
+  const poiMapPickEnabled = usePOIStore(state => state.mapPickEnabled);
   const coverageMode = useCoveragePlannerStore(state => state.mode);
   const coveragePolygon = useCoveragePlannerStore(state => state.polygon);
   const previewSegments = useCoveragePlannerStore(state => state.previewSegments);
@@ -49,9 +50,16 @@ export default function MapCanvas() {
     const onMapClick = event => {
       const coverage = useCoveragePlannerStore.getState();
       const routes = useRoutePlannerStore.getState();
-      if (coverage.mode === 'drawing' || !routes.mapPickEnabled) return;
-      routes.addStopToDraft({ name: `地图点 ${routes.draft.stops.length + 1} (${event.latlng.lat.toFixed(5)}, ${event.latlng.lng.toFixed(5)})`, lat: event.latlng.lat, lon: event.latlng.lng });
-      routes.setStatus('已从地图添加途径点。');
+      const poiStore = usePOIStore.getState();
+      if (coverage.mode === 'drawing') return;
+      if (routes.mapPickEnabled) {
+        routes.addStopToDraft({ name: `地图点 ${routes.draft.stops.length + 1} (${event.latlng.lat.toFixed(5)}, ${event.latlng.lng.toFixed(5)})`, lat: event.latlng.lat, lon: event.latlng.lng });
+        routes.setStatus('已从地图添加途径点。');
+      } else if (poiStore.mapPickEnabled) {
+        window.dispatchEvent(new CustomEvent('poi-map-picked', { detail: { lat: event.latlng.lat, lon: event.latlng.lng } }));
+        poiStore.setMapPickEnabled(false);
+        routes.setStatus('已为标记点选择地图位置。');
+      }
     };
     const fitEvent = event => fitBounds(map, event.detail);
     const poiEvent = event => map.setView([event.detail.lat, event.detail.lon], 15);
@@ -95,9 +103,10 @@ export default function MapCanvas() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map) map.getContainer().style.cursor = mapPickEnabled ? 'crosshair' : '';
+    if (map) map.getContainer().style.cursor = mapPickEnabled || poiMapPickEnabled ? 'crosshair' : '';
     if (mapPickEnabled && coverageMode === 'drawing') useCoveragePlannerStore.getState().cancelDrawing();
-  }, [mapPickEnabled, coverageMode]);
+    if (poiMapPickEnabled && coverageMode === 'drawing') useCoveragePlannerStore.getState().cancelDrawing();
+  }, [mapPickEnabled, poiMapPickEnabled, coverageMode]);
 
   useEffect(() => {
     redraw({ map: mapRef.current, layers: layersRef.current, groups, draft, draftPreview, activeRouteId, pois, coverageMode, coveragePolygon, previewSegments, showLabels });

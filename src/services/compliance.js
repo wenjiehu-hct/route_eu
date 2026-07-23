@@ -75,6 +75,8 @@ export function buildProjectReport(project, routes) {
     `- 状态：${projectStatusLabel(project.status)}`,
     `- 阶段：${({ concept: '概念验证', development: '开发验证', validation: '系统验证', homologation: '认证准备' })[project.phase] || '未设置'}`,
     `- 计划周期：${project.startDate || '未设置'} ～ ${project.endDate || '未设置'}`,
+    `- 法规基线：${project.regulatoryBaseline?.frozenAt ? `已冻结（${new Date(project.regulatoryBaseline.frozenAt).toLocaleDateString('zh-CN')}）` : '未冻结'}`,
+    `- 车型适用范围：${project.regulatoryBaseline?.vehicleCategory || '未填写'}`,
     `- 导出时间：${new Date().toLocaleString('zh-CN')}`,
     '',
     '> 本报告用于工程摸底、路线准备和内部预验证，不构成法规合规或型式认证结论。',
@@ -103,15 +105,35 @@ export function buildProjectReport(project, routes) {
   if (!(project.testRuns || []).length) lines.push('| - | 暂无测试执行 | - | - | - | - | - |');
   (project.testRuns || []).forEach(run => {
     const route = routeMap.get(run.routeId);
-    const status = ({ planned: '待执行', running: '执行中', completed: '已完成', cancelled: '已取消' })[run.status] || run.status;
+    const status = ({ planned: '待执行', ready: '准备就绪', running: '执行中', paused: '已暂停', completed: '已完成', cancelled: '已取消' })[run.status] || run.status;
     lines.push(`| ${escapeCell(run.date || '')} | ${escapeCell(run.name)} | ${escapeCell(route?.name || '')} | ${escapeCell(run.driver || '')} | ${escapeCell(run.vehicle || '')} | ${escapeCell(status)} | ${escapeCell(run.distance ? `${run.distance} km` : '')} |`);
   });
 
-  lines.push('', '## 问题闭环', '', '| 严重度 | 问题 | 状态 | 负责人 | 路线 | 证据 |', '|---|---|---|---|---|---|');
-  if (!(project.issues || []).length) lines.push('| - | 暂无问题 | - | - | - | - |');
+  (project.testRuns || []).forEach(run => {
+    if (!run.scenarioIds?.length) return;
+    lines.push('', `### ${run.name} · 场景结果`, '', '| 场景 | 结论 | 现场记录 | 外部证据 | 本机附件 |', '|---|---|---|---|---|');
+    run.scenarioIds.forEach(id => {
+      const scenario = COMPLIANCE_SCENARIOS[id];
+      const result = run.scenarioResults?.[id] || {};
+      const status = TEST_STATUSES.find(item => item.value === result.status)?.label || '未开始';
+      lines.push(`| ${escapeCell(scenario?.name || id)} | ${escapeCell(status)} | ${escapeCell(result.notes)} | ${escapeCell(result.evidence)} | ${(result.attachments || []).length} |`);
+    });
+    if ((run.attachments || []).length) lines.push('', `任务附件：${run.attachments.map(item => item.name).join('、')}`);
+  });
+
+  lines.push('', '## 问题闭环', '', '| 严重度 | 问题 | 状态 | 负责人 | 测试任务 | 路线 | 证据 | 附件 |', '|---|---|---|---|---|---|---|---|');
+  if (!(project.issues || []).length) lines.push('| - | 暂无问题 | - | - | - | - | - | - |');
   (project.issues || []).forEach(issue => {
     const route = routeMap.get(issue.routeId);
-    lines.push(`| ${escapeCell(issue.severity)} | ${escapeCell(issue.title)} | ${escapeCell(issue.status)} | ${escapeCell(issue.assignee)} | ${escapeCell(route?.name || '')} | ${escapeCell(issue.evidence)} |`);
+    const run = project.testRuns?.find(item => item.id === issue.runId);
+    lines.push(`| ${escapeCell(issue.severity)} | ${escapeCell(issue.title)} | ${escapeCell(issue.status)} | ${escapeCell(issue.assignee)} | ${escapeCell(run?.name || '')} | ${escapeCell(route?.name || '')} | ${escapeCell(issue.evidence)} | ${(issue.attachments || []).length} |`);
+  });
+  (project.issues || []).filter(issue => issue.description || issue.rootCause || issue.resolution || issue.verificationNotes).forEach(issue => {
+    lines.push('', `### ${issue.title}`, '', issue.description || '未填写问题描述');
+    if (issue.rootCause) lines.push('', `- 根因分析：${issue.rootCause}`);
+    if (issue.resolution) lines.push(`- 解决方案：${issue.resolution}`);
+    if (issue.verificationNotes) lines.push(`- 验证结论：${issue.verificationNotes}`);
+    if ((issue.attachments || []).length) lines.push(`- 本机附件：${issue.attachments.map(item => item.name).join('、')}`);
   });
 
   if ((project.milestones || []).length) {
@@ -121,11 +143,31 @@ export function buildProjectReport(project, routes) {
 
   if (project.notes) lines.push('', '## 项目备注', '', project.notes);
   if (profile.references.length) {
-    lines.push('', '## 参考文件', '');
-    profile.references.forEach(reference => lines.push(`- [${reference.label}](${reference.url})`));
+    lines.push('', '## 法规基线与参考文件', '');
+    if (project.regulatoryBaseline?.applicabilityDate) lines.push(`- 适用日期：${project.regulatoryBaseline.applicabilityDate}`);
+    if (project.regulatoryBaseline?.approvedBy) lines.push(`- 法规审核人：${project.regulatoryBaseline.approvedBy}`);
+    (project.regulatoryBaseline?.references || profile.references).forEach(reference => lines.push(`- [${reference.label}](${reference.url})${reference.version ? ` · ${reference.version}` : ''}${reference.status ? ` · ${reference.status}` : ''}`));
+    if (project.regulatoryBaseline?.notes) lines.push('', project.regulatoryBaseline.notes);
   }
   lines.push('', '## 使用限制', '', '- OSM 与导航数据可能缺失、过期或与现场标志不一致。', '- 路线评分只用于筛选路线，法规结论必须依据适用版本原文、现场真值和合格试验程序。', '- 涉及 AEB、转向干预、超驰等风险动作时，应遵守当地法律并在封闭场地或受控条件下执行。');
   return lines.join('\n');
+}
+
+export function buildProjectCsv(project, routes) {
+  const routeMap = new Map(routes.map(route => [route.id, route]));
+  const rows = [['record_type', 'project', 'date', 'test_run', 'route', 'scenario', 'status', 'driver', 'vehicle', 'distance_km', 'issue', 'severity', 'assignee', 'notes', 'evidence']];
+  (project.testRuns || []).forEach(run => {
+    if (!run.scenarioIds?.length) rows.push(['run', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', '', run.status, run.driver, run.vehicle, run.distance || '', '', '', '', run.notes, attachmentIndex(run.attachments)]);
+    run.scenarioIds?.forEach(id => {
+      const result = run.scenarioResults?.[id] || {};
+      rows.push(['scenario', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', COMPLIANCE_SCENARIOS[id]?.name || id, result.status || 'not_started', run.driver, run.vehicle, run.distance || '', '', '', '', result.notes || '', [result.evidence, attachmentIndex(result.attachments)].filter(Boolean).join(' | ')]);
+    });
+  });
+  (project.issues || []).forEach(issue => {
+    const run = project.testRuns?.find(item => item.id === issue.runId);
+    rows.push(['issue', project.name, issue.createdAt?.slice(0, 10) || '', run?.name || '', routeMap.get(issue.routeId)?.name || '', COMPLIANCE_SCENARIOS[issue.scenarioId]?.name || '', issue.status, '', '', '', issue.title, issue.severity, issue.assignee, [issue.description, issue.rootCause, issue.resolution, issue.verificationNotes].filter(Boolean).join(' | '), [issue.evidence, attachmentIndex(issue.attachments)].filter(Boolean).join(' | ')]);
+  });
+  return `\uFEFF${rows.map(row => row.map(csvCell).join(',')).join('\r\n')}`;
 }
 
 export function bestRouteForScenario(routes, scenarioId) {
@@ -153,4 +195,13 @@ function escapeCell(value) {
 
 function projectStatusLabel(status) {
   return ({ planning: '规划中', running: '执行中', paused: '暂停', completed: '已完成' })[status] || '规划中';
+}
+
+function csvCell(value) {
+  const text = String(value ?? '').replaceAll('"', '""');
+  return `"${text}"`;
+}
+
+function attachmentIndex(attachments = []) {
+  return attachments.map(item => item.name).join(' | ');
 }

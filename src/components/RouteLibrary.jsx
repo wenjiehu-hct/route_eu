@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { formatHours, formatKm } from '../services/utils.js';
+import { useComplianceStore } from '../stores/useComplianceStore.js';
 import { useRoutePlannerStore } from '../stores/useRoutePlannerStore.js';
 import { Button, Card, Chip, EmptyState } from './ui.jsx';
 
@@ -12,6 +13,9 @@ export default function RouteLibrary() {
   const [sort, setSort] = useState('recent');
   const [selected, setSelected] = useState([]);
   const [moveTarget, setMoveTarget] = useState('');
+  const projects = useComplianceStore(state => state.projects);
+  const activeProjectId = useComplianceStore(state => state.activeProjectId);
+  const [assignProjectId, setAssignProjectId] = useState(activeProjectId || projects[0]?.id || '');
   const allRoutes = useMemo(() => store.groups.flatMap(group => group.routes), [store.groups]);
   const activeRoute = allRoutes.find(route => route.id === store.activeRouteId) || null;
   const totalDistance = allRoutes.reduce((sum, route) => sum + (route.stats?.distance || 0), 0);
@@ -35,9 +39,10 @@ export default function RouteLibrary() {
       <RoadBreakdown route={activeRoute} />
       <RegulatoryFeatures route={activeRoute} />
       <div className="toolbar-row"><Button size="sm" onClick={() => store.exportRouteGpx(activeRoute.id)}>导出 GPX</Button><Button size="sm" onClick={() => store.copyRouteSummary(activeRoute.id)}>复制摘要</Button>{activeRoute.googleUrl && <a className="button button-secondary button-sm" href={activeRoute.googleUrl} target="_blank" rel="noreferrer">Google 导航 ↗</a>}</div>
+      {!!projects.length && <div className="route-project-assign"><select value={assignProjectId} onChange={event => setAssignProjectId(event.target.value)}>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select><Button size="sm" disabled={!assignProjectId} onClick={() => assignToProject(assignProjectId, [activeRoute.id])}>加入测试项目</Button></div>}
     </section>}
 
-    {!!selected.length && <div className="bulk-bar"><strong>已选 {selected.length} 条</strong><Button size="sm" onClick={() => store.setRoutesVisibility(selected, true)}>显示</Button><Button size="sm" onClick={() => store.setRoutesVisibility(selected, false)}>隐藏</Button><select value={moveTarget} onChange={event => setMoveTarget(event.target.value)}><option value="">移动到...</option>{store.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><Button size="sm" disabled={!moveTarget} onClick={() => { store.moveRoutesToGroup(selected, moveTarget); setSelected([]); }}>移动</Button><Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除选中的 ${selected.length} 条路线？`)) { store.deleteRoutes(selected); setSelected([]); } }}>删除</Button></div>}
+    {!!selected.length && <div className="bulk-bar"><strong>已选 {selected.length} 条</strong><Button size="sm" onClick={() => store.setRoutesVisibility(selected, true)}>显示</Button><Button size="sm" onClick={() => store.setRoutesVisibility(selected, false)}>隐藏</Button><select value={moveTarget} onChange={event => setMoveTarget(event.target.value)}><option value="">移动到...</option>{store.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><Button size="sm" disabled={!moveTarget} onClick={() => { store.moveRoutesToGroup(selected, moveTarget); setSelected([]); }}>移动</Button>{!!projects.length && <><select value={assignProjectId} onChange={event => setAssignProjectId(event.target.value)}>{projects.map(project => <option key={project.id} value={project.id}>加入：{project.name}</option>)}</select><Button size="sm" disabled={!assignProjectId} onClick={() => { assignToProject(assignProjectId, selected); setSelected([]); }}>加入项目</Button></>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除选中的 ${selected.length} 条路线？`)) { store.deleteRoutes(selected); setSelected([]); } }}>删除</Button></div>}
 
     {!displayed.length ? <EmptyState title="没有符合条件的路线" description="调整筛选条件，或从区域规划创建路线。" /> : <div className="route-groups">
       {displayed.map(({ group, routes }) => <section key={group.id} className="route-group">
@@ -78,6 +83,11 @@ function topRoadTypes(route) {
 
 function renameGroup(store, group) { const name = window.prompt('分组名称', group.name); if (name) store.renameGroup(group.id, name); }
 function removeGroup(store, group) { if (window.confirm(`删除分组“${group.name}”及其中全部路线？`)) store.removeGroup(group.id); }
+function assignToProject(projectId, routeIds) {
+  const project = useComplianceStore.getState().projects.find(item => item.id === projectId);
+  useComplianceStore.getState().assignRoutesToProject(projectId, routeIds);
+  useRoutePlannerStore.getState().setStatus(`已将 ${routeIds.length} 条路线加入项目“${project?.name || ''}”。`);
+}
 function handleRouteAction(store, route, action) {
   if (action === 'solo') store.showOnlyRoute(route.id);
   if (action === 'edit') store.startEditRoute(route.id);

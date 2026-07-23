@@ -26,6 +26,7 @@ export const useCoveragePlannerStore = create((set, get) => ({
   highwayTypeOptions: HIGHWAY_TYPE_OPTIONS,
 
   setOption: (key, value) => set({ [key]: value }),
+  clearComplianceContext: () => set({ complianceProjectId: null }),
   startDrawing: () => {
     useRoutePlannerStore.getState().setMapPickEnabled(false);
     set({ mode: 'drawing', progress: { phase: 'draw', message: '请在地图上逐点绘制多边形区域。', percent: 0 } });
@@ -154,4 +155,3 @@ function buildCoverageStats(segment) {
   const ruralDistance = Math.max(0, distance - motorwayDistance - urbanDistance);
   return { geometry: (segment.geometry || []).map(([lat, lon]) => [lon, lat]), distance, duration: Math.round(distance / 11.1), motorwayDistance, urbanDistance, ruralDistance, share: { motorway: distance ? motorwayDistance / distance : 0, urban: distance ? urbanDistance / distance : 0, rural: distance ? ruralDistance / distance : 0 }, roadTypeDistances, regulatorySignals: segment.regulatorySignals || {}, topRoads: segment.topRoads || [], coverage: { deadheadMeters: segment.deadheadMeters || 0, crossOverlapMeters: segment.crossOverlapMeters || 0, insideCoveredMeters: segment.insideCoveredMeters || 0, outsideMeters: segment.outsideMeters || 0, duplicationRatio: segment.duplicationRatio || 0 } };
 }
-

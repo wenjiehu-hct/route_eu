@@ -102,5 +102,6 @@ function getPageMeta(pathname, projects) {
   }
   if (pathname.startsWith('/planning')) return TITLES['/planning'];
   if (pathname.startsWith('/routes')) return TITLES['/routes'];
+  if (pathname.startsWith('/execution/')) return ['现场测试会话', '行前检查、场景执行、证据与问题登记'];
   return TITLES[pathname] || ['Global Road Test Studio', '海外道路测试运营平台'];
 }
