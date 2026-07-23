@@ -26,6 +26,7 @@ export const useCoveragePlannerStore = create((set, get) => ({
   highwayTypeOptions: HIGHWAY_TYPE_OPTIONS,
 
   setOption: (key, value) => set({ [key]: value }),
+  setComplianceContext: projectId => set({ complianceProjectId: projectId || null }),
   clearComplianceContext: () => set({ complianceProjectId: null }),
   startDrawing: () => {
     useRoutePlannerStore.getState().setMapPickEnabled(false);

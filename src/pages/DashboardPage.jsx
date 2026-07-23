@@ -83,8 +83,8 @@ export default function DashboardPage() {
 
     <section className="quick-launch">
       <div><span>QUICK LAUNCH</span><strong>开始下一项工作</strong></div>
-      <Link to="/planning/area"><i>PL</i><span><strong>区域智能规划</strong><small>多边形生成低重复长路线</small></span></Link>
-      <Link to="/planning/manual"><i>MN</i><span><strong>手工路线设计</strong><small>精确调整途经点与导航</small></span></Link>
+      <Link to="/planning/manual"><i>WP</i><span><strong>添加 Waypoint 路线</strong><small>日常路线规划、途经点编辑与导航</small></span></Link>
+      <Link to="/planning/area"><i>AR</i><span><strong>选区覆盖路线生成</strong><small>多边形批量生成低重复长路线</small></span></Link>
       <Link to="/execution"><i>EX</i><span><strong>安排测试执行</strong><small>驾驶员、车辆、场景和路线</small></span></Link>
       <Link to="/data"><i>BK</i><span><strong>备份工作区</strong><small>导出完整可迁移数据</small></span></Link>
     </section>

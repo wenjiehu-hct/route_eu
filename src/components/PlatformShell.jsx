@@ -83,7 +83,7 @@ export default function PlatformShell() {
       <header className="platform-topbar">
         <div className="topbar-title"><span>GLOBAL ROAD TEST STUDIO</span><strong>{current[0]}</strong><small>{current[1]}</small></div>
         <div className="topbar-actions">
-          <button className="command-button" onClick={() => navigate('/planning')}><span>＋</span> 创建路线</button>
+          <button className="command-button" onClick={() => navigate('/planning/manual')}><span>＋</span> 添加 Waypoint 路线</button>
           <button className="command-button primary" onClick={() => navigate('/projects?create=1')}><span>＋</span> 新建项目</button>
           <div className="user-avatar" title="本地工作区">LOCAL</div>
         </div>

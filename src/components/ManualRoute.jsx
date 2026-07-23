@@ -37,7 +37,7 @@ export default function ManualRoute() {
     }
   };
   return <div className="stack-lg">
-    <Card title={store.draft.id ? '编辑路线' : '手工路线'} subtitle="搜索城市、输入坐标，或直接在地图上点击添加途经点">
+    <Card title={store.draft.id ? '编辑 Waypoint 路线' : '常规 Waypoint 路线规划'} subtitle="搜索地点、输入坐标，或直接在地图上依次添加和排序途经点">
       {complianceProjectId && <div className="notice notice-blue context-notice"><span>项目规划模式：新保存的路线会自动加入当前测试项目。</span><Button size="sm" onClick={() => useCoveragePlannerStore.getState().clearComplianceContext()}>退出项目模式</Button></div>}
       <div className="form-grid">
         <label className="field span-2"><span>路线名称</span><input value={store.draft.name} onChange={event => store.setDraftField('name', event.target.value)} placeholder="例如：慕尼黑 ISA 城郊基准路线" /></label>

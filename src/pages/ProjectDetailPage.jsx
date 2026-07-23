@@ -39,9 +39,11 @@ export default function ProjectDetailPage() {
   const metrics = getProjectMetrics(project, routes);
   const profile = getComplianceProfile(project.profileId);
   const setTab = value => navigate(`/projects/${project.id}/${value}`);
+  const openWaypointPlanner = () => { useCoveragePlannerStore.getState().setComplianceContext(project.id); navigate('/planning/manual'); };
+  const openAreaPlanner = () => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); navigate('/planning/area'); };
 
   return <div className="page-stack project-detail-page">
-    <PageHeader eyebrow={`${profile.type} · ${project.market}`} title={project.name} description={`${project.vehicle || '车型/版本待定义'} · ${project.owner || '负责人待指派'} · 更新于 ${formatDate(project.updatedAt)}`} actions={<><Button onClick={() => store.exportProjectCsv(project.id, routes)}>导出执行 CSV</Button><Button onClick={() => store.exportProject(project.id, routes)}>导出项目报告</Button><Button variant="primary" onClick={() => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); navigate('/planning/area'); }}>为项目规划路线</Button></>}>
+    <PageHeader eyebrow={`${profile.type} · ${project.market}`} title={project.name} description={`${project.vehicle || '车型/版本待定义'} · ${project.owner || '负责人待指派'} · 更新于 ${formatDate(project.updatedAt)}`} actions={<><Button onClick={() => store.exportProjectCsv(project.id, routes)}>导出执行 CSV</Button><Button onClick={() => store.exportProject(project.id, routes)}>导出项目报告</Button><Button onClick={openAreaPlanner}>选区覆盖生成</Button><Button variant="primary" onClick={openWaypointPlanner}>＋ 添加 Waypoint 路线</Button></>}>
       <div className="header-badges"><StatusBadge value={project.status} labels={STATUS_LABELS} /><StatusBadge value={project.phase} labels={PHASE_LABELS} /><StatusBadge value={project.priority} labels={PRIORITY_LABELS} tone={project.priority === 'critical' ? 'red' : project.priority === 'high' ? 'amber' : 'neutral'} /></div>
     </PageHeader>
 
@@ -55,7 +57,7 @@ export default function ProjectDetailPage() {
 
     <nav className="project-tabs">{TABS.map(item => <button key={item.value} className={tab === item.value ? 'active' : ''} onClick={() => setTab(item.value)}>{item.label}{item.value === 'runs' && <span>{project.testRuns.length}</span>}{item.value === 'issues' && <span>{metrics.openIssues.length}</span>}</button>)}</nav>
 
-    {tab === 'overview' && <ProjectOverview project={project} metrics={metrics} store={store} navigate={navigate} />}
+    {tab === 'overview' && <ProjectOverview project={project} metrics={metrics} store={store} navigate={navigate} openWaypointPlanner={openWaypointPlanner} openAreaPlanner={openAreaPlanner} />}
     {tab === 'compliance' && <div className="embedded-workbench"><ComplianceWorkbench /></div>}
     {tab === 'runs' && <TestRunsPanel project={project} routes={routes} store={store} />}
     {tab === 'issues' && <IssuesPanel project={project} routes={routes} store={store} />}
@@ -63,7 +65,7 @@ export default function ProjectDetailPage() {
   </div>;
 }
 
-function ProjectOverview({ project, metrics, store, navigate }) {
+function ProjectOverview({ project, metrics, store, navigate, openWaypointPlanner, openAreaPlanner }) {
   const update = (field, value) => store.updateProjectById(project.id, { [field]: value });
   const assignedRoutes = metrics.assignedRoutes;
   const nextMilestones = project.milestones.filter(item => item.status !== 'completed').slice(0, 4);
@@ -86,7 +88,7 @@ function ProjectOverview({ project, metrics, store, navigate }) {
       </Card>
 
       <Card title="测试路线包" subtitle={`${assignedRoutes.length} 条路线已关联，覆盖 ${formatKm(metrics.assignedDistance)}`} actions={<Button size="sm" onClick={() => navigate(`/projects/${project.id}/compliance`)}>管理路线与场景</Button>}>
-        {!assignedRoutes.length ? <EmptyState icon="RT" title="项目还没有测试路线" description="从路线资产库分配现有路线，或按当前法规模板生成新路线。" action={<Button variant="primary" onClick={() => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); navigate('/planning/area'); }}>规划项目路线</Button>} /> : <div className="assigned-route-grid">
+        {!assignedRoutes.length ? <EmptyState icon="RT" title="项目还没有测试路线" description="通常通过 Waypoint 添加常规测试路线；需要区域采集时再使用多边形覆盖生成。" action={<div className="empty-actions"><Button variant="primary" onClick={openWaypointPlanner}>添加 Waypoint 路线</Button><Button onClick={openAreaPlanner}>选区覆盖生成</Button></div>} /> : <div className="assigned-route-grid">
           {assignedRoutes.slice(0, 6).map(route => <button key={route.id} onClick={() => { useRoutePlannerStore.getState().locateRoute(route.id); navigate('/routes'); }}><i style={{ background: route.color }} /><div><strong>{route.name}</strong><span>{formatKm(route.stats?.distance || 0)} · {topRoadTypes(route)}</span></div><em>查看地图 →</em></button>)}
         </div>}
       </Card>
@@ -113,7 +115,7 @@ function ProjectOverview({ project, metrics, store, navigate }) {
 
       <Card title="下一步建议" subtitle="基于当前项目数据自动判断">
         <div className="next-actions">
-          {!assignedRoutes.length && <button onClick={() => navigate('/planning/area')}><span>1</span><div><strong>准备项目路线</strong><small>当前没有关联路线</small></div></button>}
+          {!assignedRoutes.length && <button onClick={openWaypointPlanner}><span>1</span><div><strong>添加常规 Waypoint 路线</strong><small>当前没有关联路线</small></div></button>}
           {assignedRoutes.length > 0 && !project.testRuns.length && <button onClick={() => navigate(`/projects/${project.id}/runs`)}><span>1</span><div><strong>创建首次测试执行</strong><small>路线已准备，尚未排期</small></div></button>}
           {metrics.openIssues.length > 0 && <button onClick={() => navigate(`/projects/${project.id}/issues`)}><span>!</span><div><strong>推进问题闭环</strong><small>{metrics.openIssues.length} 个问题待处理</small></div></button>}
           {nextMilestones.slice(0, 2).map((item, index) => <button key={item.id}><span>{index + 2}</span><div><strong>{item.name}</strong><small>{item.dueDate ? formatDate(item.dueDate) : '日期待设置'} · {item.owner || '未指派'}</small></div></button>)}

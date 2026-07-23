@@ -15,7 +15,7 @@ export default function CoveragePlanner() {
   const selectedCount = store.previewSegments.filter(segment => segment.selected).length;
   const setNumber = (key, value) => store.setOption(key, Number(value));
 
-  return <Card title="区域智能规划" subtitle="在任意多边形内生成 4–5 条长路线，优先低重复和道路差异">
+  return <Card title="选区覆盖路线生成" subtitle="专项批量能力：在任意多边形内生成 4–5 条长路线，优先低重复和道路差异">
     {store.complianceProjectId && <div className="notice notice-blue context-notice"><span>法规项目模式已启用：保存后的路线会自动加入当前测试项目。</span><Button size="sm" onClick={store.clearComplianceContext}>退出项目模式</Button></div>}
     <div className="section-block">
       <div className="section-label">道路类型</div>

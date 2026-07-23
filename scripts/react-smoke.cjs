@@ -89,7 +89,8 @@ app.whenReady().then(async () => {
       const routeMapMounted = await waitFor('.leaflet-container');
       document.querySelector('.platform-nav a[href="#/planning"]')?.click();
       const planningOpened = await waitFor('.planning-page');
-      return { createPanelOpened, projectCreated, runCreated, sessionOpened, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened };
+      const waypointModeDefault = document.querySelector('.planning-methods button.active strong')?.textContent?.includes('Waypoint');
+      return { createPanelOpened, projectCreated, runCreated, sessionOpened, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
@@ -99,6 +100,7 @@ app.whenReady().then(async () => {
     if (!interaction.issueCreated) errors.push('Issue creation failed');
     if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
     if (!interaction.planningOpened) errors.push('Planning center failed to open');
+    if (!interaction.waypointModeDefault) errors.push('Waypoint planning is not the default planning mode');
     if (errors.length) failed = true;
     process.stdout.write(`${JSON.stringify({ ...result, ...interaction, errors }, null, 2)}\n`);
     window.destroy();

@@ -131,6 +131,7 @@ textarea { resize: vertical; }
 .empty-state { display: flex; min-height: 180px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 28px 16px; text-align: center; }
 .empty-state p { max-width: 440px; margin: 0 0 4px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .empty-symbol { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; color: #245f9f; background: #e9f2fd; font-size: 12px; font-weight: 850; }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
 .notice { padding: 9px 11px; border: 1px solid #d9e2ed; border-radius: 8px; color: #526175; background: #f6f8fb; font-size: 10px; line-height: 1.55; }
 .notice-blue { border-color: #bdd6f6; color: #174f91; background: #eff6ff; }
 .notice-amber { border-color: #ecd18a; color: #785718; background: #fff9e9; }
