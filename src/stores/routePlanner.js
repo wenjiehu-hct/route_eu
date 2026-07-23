@@ -410,12 +410,13 @@ ${trackPoints}
    * 导出全部路线数据为 JSON 文件（包含 OSRM 几何路径等完整数据）。
    * 导出后无需再次请求 OSRM API，导入即可直接渲染。
    */
-  function exportData({ pois = [] } = {}) {
+  function exportData({ pois = [], compliance = null } = {}) {
     const payload = {
       version: 2,
       exportedAt: new Date().toISOString(),
       groups: JSON.parse(JSON.stringify(groups.value)),
       pois: JSON.parse(JSON.stringify(pois)),
+      compliance: compliance ? JSON.parse(JSON.stringify(compliance)) : null,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -425,7 +426,7 @@ ${trackPoints}
     anchor.download = `route-planner-${timestamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setStatus(`已备份 ${allRoutes.value.length} 条路线和 ${pois.length} 个收藏点。`);
+    setStatus(`已备份 ${allRoutes.value.length} 条路线、${pois.length} 个收藏点和 ${compliance?.projects?.length || 0} 个法规项目。`);
   }
 
   /**

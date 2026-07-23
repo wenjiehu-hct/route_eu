@@ -69,6 +69,49 @@ body {
   box-sizing: border-box;
 }
 
+.workspace-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border: 1px solid #dce5f0;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, .96);
+  backdrop-filter: blur(8px);
+}
+
+.workspace-tabs button {
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 3px;
+  color: #59687b;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.workspace-tabs button:hover {
+  color: #1d4f91;
+  background: rgba(255, 255, 255, .65);
+}
+
+.workspace-tabs button.active {
+  color: #123c7a;
+  background: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, .12);
+}
+
+.workspace-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* 面板底部固定区 */
 .panel-footer {
   padding: 10px 14px;

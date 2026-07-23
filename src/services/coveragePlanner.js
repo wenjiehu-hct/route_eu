@@ -151,6 +151,7 @@ export function buildGraph(ways, bbox = null, options = {}) {
         insideLength: polygon ? polylineLengthInsidePolygon(edgeGeometry, polygon) : length,
         highway: way.tags?.highway || '',
         name: way.tags?.name || way.tags?.ref || '',
+        tags: way.tags || {},
         oneway,
       });
     }
@@ -641,6 +642,7 @@ function finalizeSegment(segment, sampleSpacingMeters, maxWaypoints, segments) {
     .map(([name, distance]) => ({ name, distance }))
     .sort((a, b) => b.distance - a.distance)
     .slice(0, 5);
+  const regulatorySignals = buildRegulatorySignals(segment.steps);
   segments.push({
     stops: stops.map((point, index) => ({
       name: `覆盖点 ${index + 1}`,
@@ -664,6 +666,7 @@ function finalizeSegment(segment, sampleSpacingMeters, maxWaypoints, segments) {
       deadhead: !!step.deadhead,
     })),
     roadTypeDistances,
+    regulatorySignals,
     topRoads,
     insideCoveredMeters: segment.steps
       .filter(step => !step.deadhead)
@@ -678,6 +681,76 @@ function finalizeSegment(segment, sampleSpacingMeters, maxWaypoints, segments) {
       lon: (bounds.west + bounds.east) / 2,
     },
   });
+}
+
+function buildRegulatorySignals(steps) {
+  const maxspeedDistances = aggregateStepDistances(steps, step => normalizeTag(step.edge.tags?.maxspeed) || 'unknown');
+  const surfaceDistances = aggregateStepDistances(steps, step => normalizeTag(step.edge.tags?.surface) || 'unknown');
+  const laneDistances = aggregateStepDistances(steps, step => normalizeTag(step.edge.tags?.lanes) || 'unknown');
+  const uniqueSpeedLimits = Object.keys(maxspeedDistances).filter(value => value !== 'unknown');
+  const roundaboutWays = new Set();
+  const trafficCalmingWays = new Set();
+  let speedTaggedDistance = 0;
+  let conditionalSpeedDistance = 0;
+  let variableSpeedDistance = 0;
+  let schoolZoneDistance = 0;
+  let tunnelDistance = 0;
+  let bridgeDistance = 0;
+  let litDistance = 0;
+  let onewayDistance = 0;
+  let unpavedDistance = 0;
+  let speedChangeCount = 0;
+  let previousSpeed = '';
+
+  steps.forEach(step => {
+    const edge = step.edge;
+    const tags = edge.tags || {};
+    const maxspeed = normalizeTag(tags.maxspeed);
+    const tagText = Object.entries(tags).map(([key, value]) => `${key}=${value}`).join(' ');
+    if (maxspeed) {
+      speedTaggedDistance += edge.length;
+      if (previousSpeed && previousSpeed !== maxspeed) speedChangeCount += 1;
+      previousSpeed = maxspeed;
+    }
+    if (tags['maxspeed:conditional']) conditionalSpeedDistance += edge.length;
+    if (/signals|variable/i.test(`${tags.maxspeed || ''} ${tags['maxspeed:variable'] || ''}`)) variableSpeedDistance += edge.length;
+    if (/school/i.test(tagText)) schoolZoneDistance += edge.length;
+    if (isTruthyTag(tags.tunnel)) tunnelDistance += edge.length;
+    if (isTruthyTag(tags.bridge)) bridgeDistance += edge.length;
+    if (tags.lit === 'yes') litDistance += edge.length;
+    if (edge.oneway) onewayDistance += edge.length;
+    if (/^(unpaved|gravel|dirt|ground|sand|mud|compacted|fine_gravel)$/i.test(tags.surface || '')) unpavedDistance += edge.length;
+    if (tags.junction === 'roundabout') roundaboutWays.add(edge.wayId);
+    if (tags.traffic_calming) trafficCalmingWays.add(edge.wayId);
+  });
+
+  delete maxspeedDistances.unknown;
+  return {
+    speedTaggedDistance,
+    speedChangeCount,
+    uniqueSpeedLimitCount: uniqueSpeedLimits.length,
+    conditionalSpeedDistance,
+    variableSpeedDistance,
+    schoolZoneDistance,
+    tunnelDistance,
+    bridgeDistance,
+    litDistance,
+    onewayDistance,
+    unpavedDistance,
+    roundaboutCount: roundaboutWays.size,
+    trafficCalmingCount: trafficCalmingWays.size,
+    maxspeedDistances,
+    surfaceDistances,
+    laneDistances,
+  };
+}
+
+function normalizeTag(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isTruthyTag(value) {
+  return value === 'yes' || value === 'true' || value === '1';
 }
 
 function aggregateStepDistances(steps, keySelector) {

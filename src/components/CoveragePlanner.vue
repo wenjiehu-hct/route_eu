@@ -1,6 +1,9 @@
 <template>
   <n-card title="道路区域规划" size="small">
     <n-space vertical :size="10">
+      <div v-if="store.complianceProjectId" class="compliance-link-banner">
+        法规项目模式：生成并保存的路线会自动加入当前法规测试项目。
+      </div>
       <div class="coverage-section">
         <div class="coverage-label">道路类型</div>
         <n-checkbox-group v-model:value="store.roadTypes">
@@ -233,6 +236,16 @@ function segmentRoadTypes(segment) {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.compliance-link-banner {
+  padding: 8px 10px;
+  border: 1px solid #9bc2f3;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #174c8f;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .coverage-label {

@@ -21,6 +21,7 @@ import {
 } from '../services/coveragePlanner.js';
 import { createId, formatKm } from '../services/utils.js';
 import { useRoutePlannerStore } from './routePlanner.js';
+import { useComplianceStore } from './compliance.js';
 
 export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
   const mode = ref('idle');
@@ -34,6 +35,7 @@ export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
   const progress = ref({ phase: '', message: '', percent: 0 });
   const previewSegments = ref([]);
   const stats = ref(createEmptyStats());
+  const complianceProjectId = ref(null);
   const areaKm2 = computed(() => estimatePolygonAreaKm2(polygon.value));
   const planningBbox = computed(() => getCoveragePlanningBbox(bbox.value));
   const queryAreaKm2 = computed(() => estimateBboxAreaKm2(planningBbox.value));
@@ -87,6 +89,7 @@ export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
     polygon.value = [];
     previewSegments.value = [];
     resetStats();
+    complianceProjectId.value = null;
     progress.value = { phase: '', message: '', percent: 0 };
   }
 
@@ -208,8 +211,29 @@ export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
       stops: segment.stops.map(stop => ({ name: stop.name, lat: stop.lat, lon: stop.lon })),
     }));
     routeStore.addRoutesToGroup(groupId, routes);
-    routeStore.setStatus(`已保存 ${routes.length} 条覆盖路线。`);
+    if (complianceProjectId.value) {
+      const complianceStore = useComplianceStore();
+      complianceStore.assignRoutesToProject(complianceProjectId.value, routes.map(route => route.id));
+      routeStore.setStatus(`已保存 ${routes.length} 条路线并加入法规测试项目。`);
+    } else {
+      routeStore.setStatus(`已保存 ${routes.length} 条覆盖路线。`);
+    }
     clearAll();
+  }
+
+  function configureForCompliance(profileId, projectId) {
+    const laneProfile = profileId === 'unece_lane_support';
+    const aebProfile = profileId === 'unece_aeb_data';
+    roadTypes.value = laneProfile
+      ? ['motorway', 'trunk', 'primary', 'secondary']
+      : ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified'];
+    includeLinks.value = true;
+    routeCount.value = 5;
+    maxSegmentKm.value = aebProfile ? 100 : (laneProfile ? 80 : 60);
+    sampleSpacingMeters.value = 250;
+    complianceProjectId.value = projectId || null;
+    const routeStore = useRoutePlannerStore();
+    routeStore.setStatus('已按法规模板配置区域规划；保存后将自动加入当前测试项目。');
   }
 
   function toggleSegmentSelected(segmentId) {
@@ -257,6 +281,7 @@ export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
     progress,
     previewSegments,
     stats,
+    complianceProjectId,
     areaKm2,
     queryAreaKm2,
     areaLimitKm2,
@@ -270,6 +295,7 @@ export const useCoveragePlannerStore = defineStore('coveragePlanner', () => {
     abort,
     generate,
     saveSelected,
+    configureForCompliance,
     toggleSegmentSelected,
     toggleSegmentVisible,
     setAllSegmentsVisible,
@@ -317,20 +343,32 @@ function buildCoverageStats(segment) {
   const motorwayDistance = Object.entries(roadTypeDistances)
     .filter(([type]) => /^(motorway|trunk)(?:_link)?$/.test(type))
     .reduce((sum, [, meters]) => sum + meters, 0);
-  const urbanDistance = Math.max(0, distance - motorwayDistance);
+  const urbanDistance = Math.min(
+    Math.max(0, distance - motorwayDistance),
+    Object.entries(roadTypeDistances).reduce((sum, [type, meters]) => {
+      const normalized = type.replace(/_link$/, '');
+      if (normalized === 'residential' || normalized === 'unclassified') return sum + meters;
+      if (normalized === 'tertiary') return sum + meters * 0.6;
+      if (normalized === 'secondary') return sum + meters * 0.35;
+      if (normalized === 'primary') return sum + meters * 0.2;
+      return sum;
+    }, 0)
+  );
+  const ruralDistance = Math.max(0, distance - motorwayDistance - urbanDistance);
   return {
     geometry,
     distance,
     duration: Math.round(distance / 11.1),
     motorwayDistance,
     urbanDistance,
-    ruralDistance: 0,
+    ruralDistance,
     share: {
       motorway: distance ? motorwayDistance / distance : 0,
       urban: distance ? urbanDistance / distance : 0,
-      rural: 0,
+      rural: distance ? ruralDistance / distance : 0,
     },
     roadTypeDistances,
+    regulatorySignals: segment.regulatorySignals || {},
     topRoads: segment.topRoads || [],
     coverage: {
       deadheadMeters: segment.deadheadMeters || 0,

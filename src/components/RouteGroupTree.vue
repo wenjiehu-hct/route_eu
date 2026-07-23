@@ -55,6 +55,11 @@
         </span>
       </div>
 
+      <div v-if="activeRegulatoryFeatures.length" class="regulatory-feature-list">
+        <span class="detail-section-title">法规路线特征（OSM 摸底）</span>
+        <n-tag v-for="item in activeRegulatoryFeatures" :key="item" size="small" type="info">{{ item }}</n-tag>
+      </div>
+
       <n-space :size="5" wrap>
         <n-button size="tiny" @click="store.exportRouteGpx(activeRoute.id)">导出 GPX</n-button>
         <n-button size="tiny" @click="store.copyRouteSummary(activeRoute.id)">复制摘要</n-button>
@@ -195,6 +200,7 @@ const visibleRouteCount = computed(() => allRoutes.value.filter(route => route.v
 const totalDistance = computed(() => allRoutes.value.reduce((sum, route) => sum + (route.stats?.distance || 0), 0));
 const hasActiveFilters = computed(() => !!searchText.value.trim() || visibilityFilter.value !== 'all');
 const activeRoadTypes = computed(() => routeRoadTypes(activeRoute.value));
+const activeRegulatoryFeatures = computed(() => routeRegulatoryFeatures(activeRoute.value));
 const activeRepeatMeters = computed(() => {
   const coverage = activeRoute.value?.stats?.coverage;
   return (coverage?.deadheadMeters || 0) + (coverage?.crossOverlapMeters || 0);
@@ -255,6 +261,21 @@ function routeRoadTypes(route, limit = Infinity) {
     }))
     .sort((a, b) => b.distance - a.distance)
     .slice(0, limit);
+}
+
+function routeRegulatoryFeatures(route) {
+  const signals = route?.stats?.regulatorySignals;
+  if (!signals) return [];
+  const result = [
+    `限速数据 ${formatKm(signals.speedTaggedDistance || 0)}`,
+    `限速变化 ${signals.speedChangeCount || 0} 次`,
+    `限速值 ${signals.uniqueSpeedLimitCount || 0} 种`,
+  ];
+  if (signals.conditionalSpeedDistance) result.push('含条件限速');
+  if (signals.variableSpeedDistance) result.push('含可变限速');
+  if (signals.tunnelDistance) result.push(`隧道 ${formatKm(signals.tunnelDistance)}`);
+  if (signals.roundaboutCount) result.push(`环岛 ${signals.roundaboutCount} 个`);
+  return result;
 }
 
 function isGroupOpen(group) {
@@ -674,6 +695,17 @@ function handleRouteAction(key) {
 .state-visible { color: #15803d; }
 .state-hidden { color: #64748b; }
 .state-warning { color: #c2410c; }
+
+.regulatory-feature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.regulatory-feature-list .detail-section-title {
+  flex-basis: 100%;
+}
 
 .route-quick-actions {
   display: flex;
