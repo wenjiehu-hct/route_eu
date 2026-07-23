@@ -42,8 +42,9 @@ export default function ManualRoute() {
       <div className="form-grid">
         <label className="field span-2"><span>路线名称</span><input value={store.draft.name} onChange={event => store.setDraftField('name', event.target.value)} placeholder="例如：慕尼黑 ISA 城郊基准路线" /></label>
         <label className="field"><span>保存分组</span><select value={store.draft.groupId || ''} onChange={event => store.setDraftField('groupId', event.target.value)}>{store.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
-        <label className="field"><span>地图选点</span><Button variant={store.mapPickEnabled ? 'primary' : 'secondary'} onClick={() => store.setMapPickEnabled(!store.mapPickEnabled)}>{store.mapPickEnabled ? '正在选点' : '启用选点'}</Button></label>
+        <label className="field"><span>地图选点</span><Button variant={store.mapPickEnabled ? 'primary' : 'secondary'} onClick={() => store.setMapPickEnabled(!store.mapPickEnabled)}>{store.mapPickEnabled ? '暂停选点' : '启用选点'}</Button></label>
       </div>
+      {store.mapPickEnabled && <div className="notice notice-blue waypoint-pick-notice"><strong>地图选点已开启</strong><span>单击右侧地图可连续添加途经点；已有点可以直接拖动调整位置。</span></div>}
       <div className="search-box"><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索城市或输入 48.137, 11.576" />{query && <button onClick={() => setQuery('')}>×</button>}</div>
       {searchState === 'searching' && <div className="search-status">正在搜索 OpenStreetMap 地名库…</div>}
       {searchState === 'error' && <div className="search-status error">在线地名搜索暂不可用，仍可输入坐标或使用本地城市库。</div>}

@@ -51,11 +51,14 @@ export default function MapCanvas() {
       const coverage = useCoveragePlannerStore.getState();
       const routes = useRoutePlannerStore.getState();
       const poiStore = usePOIStore.getState();
-      if (coverage.mode === 'drawing') return;
       if (routes.mapPickEnabled) {
+        if (coverage.mode === 'drawing') coverage.cancelDrawing();
         routes.addStopToDraft({ name: `地图点 ${routes.draft.stops.length + 1} (${event.latlng.lat.toFixed(5)}, ${event.latlng.lng.toFixed(5)})`, lat: event.latlng.lat, lon: event.latlng.lng });
         routes.setStatus('已从地图添加途径点。');
-      } else if (poiStore.mapPickEnabled) {
+        return;
+      }
+      if (coverage.mode === 'drawing') return;
+      if (poiStore.mapPickEnabled) {
         window.dispatchEvent(new CustomEvent('poi-map-picked', { detail: { lat: event.latlng.lat, lon: event.latlng.lng } }));
         poiStore.setMapPickEnabled(false);
         routes.setStatus('已为标记点选择地图位置。');

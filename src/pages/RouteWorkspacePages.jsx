@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import CoveragePlanner from '../components/CoveragePlanner.jsx';
 import ManualRoute from '../components/ManualRoute.jsx';
@@ -7,6 +8,7 @@ import RouteLibrary from '../components/RouteLibrary.jsx';
 import { PageHeader, StatCard } from '../components/ui.jsx';
 import { flattenRoutes } from '../services/portfolio.js';
 import { formatKm } from '../services/utils.js';
+import { useCoveragePlannerStore } from '../stores/useCoveragePlannerStore.js';
 import { usePOIStore } from '../stores/usePOIStore.js';
 import { useRoutePlannerStore } from '../stores/useRoutePlannerStore.js';
 
@@ -41,6 +43,21 @@ export function RouteAssetsPage() {
 export function PlanningCenterPage() {
   const { mode = 'manual' } = useParams();
   const navigate = useNavigate();
+  useEffect(() => {
+    const routeStore = useRoutePlannerStore.getState();
+    const coverageStore = useCoveragePlannerStore.getState();
+    if (mode === 'manual') {
+      coverageStore.cancelDrawing();
+      routeStore.setMapPickEnabled(true);
+      routeStore.setStatus('Waypoint 选点已开启：单击地图可连续添加途经点。');
+    } else {
+      routeStore.setMapPickEnabled(false);
+    }
+    return () => {
+      useRoutePlannerStore.getState().setMapPickEnabled(false);
+      useCoveragePlannerStore.getState().cancelDrawing();
+    };
+  }, [mode]);
   if (!['area', 'manual'].includes(mode)) return <Navigate to="/planning/manual" replace />;
   return <div className="page-stack planning-page">
     <PageHeader eyebrow="ROUTE ENGINEERING" title="路线规划中心" description={mode === 'manual' ? '常规工作模式：通过地点搜索、地图选点和 Waypoint 顺序规划一条可编辑、可导航的测试路线。' : '专项工作模式：在多边形区域内批量生成 4–5 条低重复长路线，用于区域道路采集与覆盖测试。'} />

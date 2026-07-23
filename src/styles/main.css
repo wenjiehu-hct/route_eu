@@ -499,6 +499,7 @@ textarea { resize: vertical; }
 .planning-methods > button span { display: flex; flex-direction: column; }
 .planning-methods > button strong { font-size: 10px; }
 .planning-methods > button small { margin-top: 3px; color: #8190a0; font-size: 8px; }
+.waypoint-pick-notice { display: flex; flex-direction: column; gap: 2px; }
 .planning-principles { display: flex; flex: 1; align-items: center; justify-content: flex-end; gap: 6px; color: #7f8e9f; font-size: 8px; }
 .planning-principles strong { border-radius: 99px; padding: 5px 8px; color: #4f647b; background: #e9eef4; font-size: 8px; }
 .glass-panel { background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 8px 30px rgba(16,36,62,.16); backdrop-filter: blur(14px); }
