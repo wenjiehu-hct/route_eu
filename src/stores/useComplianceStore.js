@@ -159,7 +159,7 @@ export const useComplianceStore = create((set, get) => ({
   },
   updateTestRun: (projectId, runId, updates) => updateProjectCollection(get, set, projectId, project => {
     const previous = project.testRuns.find(run => run.id === runId);
-    let next = { ...project, testRuns: project.testRuns.map(run => run.id === runId ? { ...run, ...updates, updatedAt: now() } : run), updatedAt: now() };
+    let next = { ...project, testRuns: project.testRuns.map(run => run.id === runId ? syncRunReadinessStatus({ ...run, ...updates, updatedAt: now() }) : run), updatedAt: now() };
     if (updates.status && updates.status !== previous?.status) next = withActivity(next, 'run_status', '更新了测试执行状态', `${previous?.name || '测试执行'} · ${updates.status}`);
     return next;
   }),
@@ -167,9 +167,7 @@ export const useComplianceStore = create((set, get) => ({
   toggleRunChecklist: (projectId, runId, checklistId, checked) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => {
     if (run.id !== runId) return run;
     const checklist = run.checklist.map(item => item.id === checklistId ? { ...item, checked } : item);
-    const allChecked = checklist.every(item => item.checked);
-    const status = ['planned', 'ready'].includes(run.status) ? (allChecked ? 'ready' : 'planned') : run.status;
-    return { ...run, checklist, status, updatedAt: now() };
+    return syncRunReadinessStatus({ ...run, checklist, updatedAt: now() });
   }), updatedAt: now() })),
   addRunCheckpoint: (projectId, runId, values = {}) => {
     const checkpoint = { id: createId('checkpoint'), timestamp: now(), label: '现场记录', notes: '', lat: null, lon: null, ...values };
@@ -179,7 +177,7 @@ export const useComplianceStore = create((set, get) => ({
   deleteRunCheckpoint: (projectId, runId, checkpointId) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId ? { ...run, checkpoints: run.checkpoints.filter(item => item.id !== checkpointId), updatedAt: now() } : run), updatedAt: now() })),
   startTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => {
     const run = project.testRuns.find(item => item.id === runId);
-    if (!run) return project;
+    if (!run || !getRunReadiness(run).ready) return project;
     const updated = { ...run, status: 'running', startedAt: run.startedAt || now(), endedAt: '', updatedAt: now() };
     return withActivity({ ...project, status: project.status === 'planning' ? 'running' : project.status, testRuns: project.testRuns.map(item => item.id === runId ? updated : item), updatedAt: now() }, 'run_started', '开始了道路测试', run.name);
   }),
@@ -272,6 +270,25 @@ export function normalizeProject(raw = {}) {
   };
 }
 
+export function getRunReadiness(run, routes) {
+  const checklist = Array.isArray(run?.checklist) ? run.checklist : [];
+  const routeExists = Boolean(run?.routeId) && (!Array.isArray(routes) || routes.some(route => route.id === run.routeId));
+  const requirements = [
+    { id: 'route', label: run?.routeId && !routeExists ? '已选路线资产不可用' : '分配测试路线', complete: routeExists },
+    { id: 'driver', label: '填写驾驶员', complete: Boolean(run?.driver?.trim()) },
+    { id: 'vehicle', label: '填写车辆 / 软件版本', complete: Boolean(run?.vehicle?.trim()) },
+    ...checklist.map(item => ({ id: `checklist-${item.id}`, label: item.label, complete: Boolean(item.checked) })),
+  ];
+  const missing = requirements.filter(item => !item.complete);
+  return {
+    ready: requirements.length > 3 && missing.length === 0,
+    completed: requirements.length - missing.length,
+    total: requirements.length,
+    missing,
+    requirements,
+  };
+}
+
 function normalizeRun(run = {}) {
   const timestamp = run.createdAt || now();
   return {
@@ -283,6 +300,11 @@ function normalizeRun(run = {}) {
     startedAt: run.startedAt || '', endedAt: run.endedAt || '', startOdometer: toNullableNumber(run.startOdometer), endOdometer: toNullableNumber(run.endOdometer),
     notes: run.notes || '', createdAt: timestamp, updatedAt: run.updatedAt || timestamp,
   };
+}
+
+function syncRunReadinessStatus(run) {
+  if (!['planned', 'ready'].includes(run.status)) return run;
+  return { ...run, status: getRunReadiness(run).ready ? 'ready' : 'planned' };
 }
 
 function normalizeIssue(issue = {}) {

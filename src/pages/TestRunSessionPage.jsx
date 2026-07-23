@@ -5,7 +5,7 @@ import MapCanvas from '../components/MapCanvas.jsx';
 import { Button, Card, EmptyState, ProgressBar, StatusBadge } from '../components/ui.jsx';
 import { COMPLIANCE_SCENARIOS, TEST_STATUSES, getComplianceProfile } from '../constants/compliance.js';
 import { flattenRoutes } from '../services/portfolio.js';
-import { RUN_STATUSES, useComplianceStore } from '../stores/useComplianceStore.js';
+import { RUN_STATUSES, getRunReadiness, useComplianceStore } from '../stores/useComplianceStore.js';
 import { useRoutePlannerStore } from '../stores/useRoutePlannerStore.js';
 
 const RUN_LABELS = Object.fromEntries(RUN_STATUSES.map(item => [item.value, item.label]));
@@ -23,6 +23,7 @@ export default function TestRunSessionPage() {
   const [clock, setClock] = useState(() => Date.now());
   const [checkpointNote, setCheckpointNote] = useState('');
   const [checkpointBusy, setCheckpointBusy] = useState(false);
+  const [startAttempted, setStartAttempted] = useState(false);
 
   useEffect(() => {
     if (routeId) useRoutePlannerStore.getState().locateRoute(routeId);
@@ -38,7 +39,21 @@ export default function TestRunSessionPage() {
   const completedScenarios = run.scenarioIds.filter(id => ['passed', 'failed', 'blocked', 'not_applicable'].includes(run.scenarioResults?.[id]?.status)).length;
   const checklistDone = run.checklist.filter(item => item.checked).length;
   const elapsed = run.startedAt ? Math.max(0, (run.endedAt ? new Date(run.endedAt).getTime() : clock) - new Date(run.startedAt).getTime()) : 0;
-  const canStart = Boolean(run.routeId && run.driver.trim() && run.vehicle.trim() && checklistDone === run.checklist.length);
+  const readiness = getRunReadiness(run, routes);
+  const canStart = readiness.ready;
+
+  const start = () => {
+    if (!canStart) {
+      setStartAttempted(true);
+      document.querySelector('.session-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    store.startTestRun(project.id, run.id);
+  };
+  const selectRoute = selectedRouteId => {
+    store.updateTestRun(project.id, run.id, { routeId: selectedRouteId });
+    if (selectedRouteId && !project.routeIds.includes(selectedRouteId)) store.assignRoutesToProject(project.id, [selectedRouteId]);
+  };
 
   const complete = () => {
     const incomplete = run.scenarioIds.length - completedScenarios;
@@ -63,9 +78,9 @@ export default function TestRunSessionPage() {
       <div><span>路线</span><strong>{route?.name || '未分配路线'}</strong><small>{route ? `${((route.stats?.distance || 0) / 1000).toFixed(1)} km · ${route.stops.length} 个途经点` : '返回任务编辑页分配路线'}</small></div>
       <div><span>场景完成</span><strong>{completedScenarios}/{run.scenarioIds.length}</strong><ProgressBar value={run.scenarioIds.length ? completedScenarios / run.scenarioIds.length * 100 : 0} tone="green" /></div>
       <div><span>行前检查</span><strong>{checklistDone}/{run.checklist.length}</strong><ProgressBar value={checklistDone / run.checklist.length * 100} /></div>
-      <div className="session-controls">{!['running', 'completed'].includes(run.status) && <Button variant="primary" disabled={!canStart} onClick={() => store.startTestRun(project.id, run.id)}>{run.status === 'paused' ? '继续测试' : '开始测试'}</Button>}{run.status === 'running' && <><Button onClick={() => store.pauseTestRun(project.id, run.id)}>暂停</Button><Button variant="primary" onClick={complete}>完成测试</Button></>}{run.status === 'completed' && <Button onClick={() => store.updateTestRun(project.id, run.id, { status: 'running', endedAt: '' })}>重新打开</Button>}</div>
+      <div className="session-controls">{!['running', 'completed'].includes(run.status) && <Button variant="primary" onClick={start}>{canStart ? (run.status === 'paused' ? '继续测试' : '开始测试') : `完成准备 · ${readiness.missing.length} 项`}</Button>}{run.status === 'running' && <><Button onClick={() => store.pauseTestRun(project.id, run.id)}>暂停</Button><Button variant="primary" onClick={complete}>完成测试</Button></>}{run.status === 'completed' && <Button onClick={() => store.updateTestRun(project.id, run.id, { status: 'running', endedAt: '' })}>重新打开</Button>}</div>
     </section>
-    {!canStart && !['running', 'completed'].includes(run.status) && <div className="session-warning">开始前必须完成全部行前检查，并填写驾驶员、车辆版本和测试路线。</div>}
+    {!canStart && !['running', 'completed'].includes(run.status) && <div className={`session-warning ${startAttempted ? 'attention' : ''}`}><strong>开始前还需完成 {readiness.missing.length} 项：</strong><span>{readiness.missing.map(item => item.label).join('、')}</span></div>}
 
     <div className="session-layout">
       <main className="session-main">
@@ -83,8 +98,8 @@ export default function TestRunSessionPage() {
         <Card title="行前检查" subtitle="全部完成后才能开始道路测试">
           <div className="preflight-list">{run.checklist.map(item => <label key={item.id} className={item.checked ? 'checked' : ''}><input type="checkbox" checked={item.checked} onChange={event => store.toggleRunChecklist(project.id, run.id, item.id, event.target.checked)} /><span>{item.checked ? '✓' : ''}</span><strong>{item.label}</strong></label>)}</div>
         </Card>
-        <Card title="车辆与环境">
-          <div className="session-fields"><label><span>驾驶员</span><input value={run.driver} onChange={event => store.updateTestRun(project.id, run.id, { driver: event.target.value })} /></label><label><span>车辆 / 软件版本</span><input value={run.vehicle} onChange={event => store.updateTestRun(project.id, run.id, { vehicle: event.target.value })} /></label><label><span>天气 / 路况</span><input value={run.weather} onChange={event => store.updateTestRun(project.id, run.id, { weather: event.target.value })} /></label><div className="odometer-fields"><label><span>开始里程表</span><input type="number" value={run.startOdometer ?? ''} onChange={event => store.updateTestRun(project.id, run.id, { startOdometer: event.target.value === '' ? null : Number(event.target.value) })} /></label><label><span>结束里程表</span><input type="number" value={run.endOdometer ?? ''} onChange={event => store.updateTestRun(project.id, run.id, { endOdometer: event.target.value === '' ? null : Number(event.target.value) })} /></label></div><label><span>任务备注</span><textarea rows="3" value={run.notes} onChange={event => store.updateTestRun(project.id, run.id, { notes: event.target.value })} /></label></div>
+        <Card title="任务配置与环境" subtitle="可在现场工作台直接补齐任务，不必返回项目页">
+          <div className="session-fields"><label><span>测试路线</span><select value={run.routeId} onChange={event => selectRoute(event.target.value)}><option value="">请选择路线</option>{routes.map(item => <option key={item.id} value={item.id}>{item.name}{project.routeIds.includes(item.id) ? '' : '（选择后加入项目）'}</option>)}</select></label><label><span>驾驶员</span><input value={run.driver} onChange={event => store.updateTestRun(project.id, run.id, { driver: event.target.value })} /></label><label><span>车辆 / 软件版本</span><input value={run.vehicle} onChange={event => store.updateTestRun(project.id, run.id, { vehicle: event.target.value })} /></label><label><span>天气 / 路况</span><input value={run.weather} onChange={event => store.updateTestRun(project.id, run.id, { weather: event.target.value })} /></label><div className="odometer-fields"><label><span>开始里程表</span><input type="number" value={run.startOdometer ?? ''} onChange={event => store.updateTestRun(project.id, run.id, { startOdometer: event.target.value === '' ? null : Number(event.target.value) })} /></label><label><span>结束里程表</span><input type="number" value={run.endOdometer ?? ''} onChange={event => store.updateTestRun(project.id, run.id, { endOdometer: event.target.value === '' ? null : Number(event.target.value) })} /></label></div><label><span>任务备注</span><textarea rows="3" value={run.notes} onChange={event => store.updateTestRun(project.id, run.id, { notes: event.target.value })} /></label></div>
         </Card>
         <Card title="路线地图" subtitle={route ? route.name : '未分配路线'} className="session-map-card"><div className="session-map"><MapCanvas /></div>{route && <div className="toolbar-row"><Button size="sm" onClick={() => useRoutePlannerStore.getState().locateRoute(route.id)}>重新定位</Button><Button size="sm" onClick={() => useRoutePlannerStore.getState().exportRouteGpx(route.id)}>导出 GPX</Button></div>}</Card>
         <div className="session-safety"><strong>安全边界</strong><p>公共道路测试不得主动制造危险场景。驾驶员始终对车辆控制与当地交通法规负责；高风险动作应在封闭或受控环境中执行。</p></div>

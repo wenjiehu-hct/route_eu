@@ -21,7 +21,7 @@ export default function ExecutionCenterPage() {
   const allRuns = useMemo(() => store.projects.flatMap(item => item.testRuns.map(run => ({ ...run, project: item }))), [store.projects]);
   const allIssues = useMemo(() => store.projects.flatMap(item => item.issues.map(issue => ({ ...issue, project: item }))), [store.projects]);
   const today = new Date().toISOString().slice(0, 10);
-  const upcomingRuns = allRuns.filter(run => run.status === 'planned' && (!run.date || run.date >= today));
+  const upcomingRuns = allRuns.filter(run => ['planned', 'ready', 'paused'].includes(run.status) && (run.status === 'paused' || !run.date || run.date >= today));
   const activeRuns = allRuns.filter(run => run.status === 'running');
   const openIssues = allIssues.filter(issue => !['verified', 'closed'].includes(issue.status));
   const completedDistance = allRuns.filter(run => run.status === 'completed').reduce((sum, run) => sum + run.distance, 0);
@@ -31,7 +31,7 @@ export default function ExecutionCenterPage() {
     <PageHeader eyebrow="TEST OPERATIONS" title="测试执行中心" description="统一管理测试排期、现场执行、里程回填、问题登记和修复验证。" actions={project && <Link className="button button-secondary button-md" to={`/projects/${project.id}`}>打开当前项目</Link>} />
     <section className="stats-grid compact-stats">
       <StatCard icon="NOW" label="执行中" value={activeRuns.length} detail="正在进行的道路测试" tone="blue" />
-      <StatCard icon="NEXT" label="待执行" value={upcomingRuns.length} detail="已计划的测试任务" tone="violet" />
+      <StatCard icon="NEXT" label="待执行 / 继续" value={upcomingRuns.length} detail="待准备、已就绪或已暂停的任务" tone="violet" />
       <StatCard icon="KM" label="累计实测里程" value={`${completedDistance.toFixed(1)} km`} detail={`${allRuns.filter(run => run.status === 'completed').length} 个已完成任务`} tone="green" />
       <StatCard icon="!" label="待闭环问题" value={openIssues.length} detail={`${openIssues.filter(issue => ['critical', 'high'].includes(issue.severity)).length} 个高风险`} tone={openIssues.length ? 'amber' : 'green'} />
     </section>

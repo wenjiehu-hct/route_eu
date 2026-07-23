@@ -366,6 +366,13 @@ textarea { resize: vertical; }
 .run-summary span { display: flex; min-width: 0; flex-direction: column; padding: 8px 9px; border-radius: 8px; background: #f6f8fb; }
 .run-summary small { color: #8795a5; font-size: 8px; }
 .run-summary strong { margin-top: 3px; overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.run-readiness { display: grid; grid-template-columns: auto minmax(100px,220px) minmax(0,1fr); gap: 9px; align-items: center; margin: -2px 0 10px; border-radius: 8px; padding: 7px 9px; color: #5f7083; background: #f5f8fc; }
+.run-readiness > div { display: flex; gap: 6px; align-items: baseline; }
+.run-readiness span, .run-readiness small { font-size: 8px; }
+.run-readiness strong { color: #2867a8; font-size: 10px; }
+.run-readiness .progress-track { height: 5px; }
+.run-readiness.ready { color: #33775a; background: #eff9f4; }
+.run-readiness.ready strong { color: #25835a; }
 .run-card > footer, .issue-card > footer { display: flex; gap: 6px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
 .run-editor { margin: 12px -12px 10px; padding: 13px; border-block: 1px solid #d9e6f4; background: #f7fbff; }
 .scenario-picker { margin-top: 12px; }
@@ -691,7 +698,9 @@ textarea { resize: vertical; }
 .session-command-bar small { overflow: hidden; color: #7fa0bd; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .session-command-bar .progress-track { width: 90%; height: 4px; background: rgba(255,255,255,.15); }
 .session-controls { display: flex; justify-content: flex-end; gap: 6px; padding-left: 13px; }
-.session-warning { border: 1px solid #ebcf91; border-radius: 8px; padding: 8px 11px; color: #765613; background: #fff8e7; font-size: 9px; }
+.session-warning { display: flex; flex-wrap: wrap; gap: 4px 8px; border: 1px solid #ebcf91; border-radius: 8px; padding: 8px 11px; color: #765613; background: #fff8e7; font-size: 9px; }
+.session-warning.attention { border-color: #dcae45; box-shadow: 0 0 0 3px rgba(220,174,69,.15); }
+.session-warning span { color: #8d6b23; }
 .session-layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(340px,.62fr); gap: 14px; align-items: start; }
 .session-main, .session-sidebar { display: flex; min-width: 0; flex-direction: column; gap: 13px; }
 .live-scenario-list { display: flex; flex-direction: column; gap: 9px; }

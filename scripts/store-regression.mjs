@@ -33,6 +33,8 @@ assert(normalizedLegacy.phase === 'concept' && normalizedLegacy.priority === 'me
 assert(Array.isArray(normalizedLegacy.testRuns) && Array.isArray(normalizedLegacy.issues) && Array.isArray(normalizedLegacy.activities), 'Legacy project collections were not migrated');
 assert(Array.isArray(normalizedLegacy.regulatoryBaseline.references), 'Legacy project regulatory baseline was not migrated');
 const testRun = useComplianceStore.getState().addTestRun(project.id, { name: 'Munich execution', routeId: 'route-test', driver: 'Driver A', vehicle: 'Vehicle A', scenarioIds: ['isa_total_distance'] });
+useComplianceStore.getState().startTestRun(project.id, testRun.id);
+assert(useComplianceStore.getState().projects[0].testRuns[0].status === 'planned', 'Incomplete run was allowed to start');
 for (const item of testRun.checklist) useComplianceStore.getState().toggleRunChecklist(project.id, testRun.id, item.id, true);
 assert(useComplianceStore.getState().projects[0].testRuns[0].status === 'ready', 'Preflight checklist did not make the run ready');
 useComplianceStore.getState().startTestRun(project.id, testRun.id);

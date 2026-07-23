@@ -51,6 +51,11 @@ app.whenReady().then(async () => {
     if (result.navItems !== 7) errors.push(`Expected 7 platform navigation items, found ${result.navItems}`);
     if (result.statCards !== 4) errors.push(`Expected 4 dashboard stat cards, found ${result.statCards}`);
     if (!result.hasDashboard) errors.push('Portfolio dashboard did not render');
+    await window.webContents.executeJavaScript(`localStorage.setItem('routePlannerVue.groups.v1', JSON.stringify([{ id: 'smoke-group', name: 'Smoke routes', expanded: true, routes: [{ id: 'route-smoke', name: 'Smoke waypoint route', color: '#2563eb', visible: true, stops: [{ name: 'A', lat: 48.13, lon: 11.57 }, { name: 'B', lat: 48.18, lon: 11.62 }], stats: { distance: 12000, duration: 900, roadTypeDistances: { primary: 12000 } } }] }]))`);
+    const reloaded = new Promise(resolve => window.webContents.once('did-finish-load', resolve));
+    window.reload();
+    await reloaded;
+    await new Promise(resolve => setTimeout(resolve, 1200));
     const interaction = await window.webContents.executeJavaScript(`(async () => {
       const waitFor = async selector => {
         for (let index = 0; index < 30; index += 1) {
@@ -67,8 +72,35 @@ app.whenReady().then(async () => {
       await waitFor('.execution-panel');
       document.querySelector('.execution-panel .card-actions .button-primary')?.click();
       const runCreated = await waitFor('.run-card');
+      if (!await waitFor('.run-editor')) {
+        document.querySelector('.run-card footer button.button-secondary')?.click();
+        await waitFor('.run-editor');
+      }
+      const setValue = (element, value) => {
+        const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+        element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
+      };
+      const runEditor = document.querySelector('.run-editor');
+      const routeSelect = [...runEditor.querySelectorAll('label')].find(label => label.querySelector('span')?.textContent === '测试路线')?.querySelector('select');
+      const driverInput = [...runEditor.querySelectorAll('label')].find(label => label.querySelector('span')?.textContent === '驾驶员')?.querySelector('input');
+      const vehicleInput = [...runEditor.querySelectorAll('label')].find(label => label.querySelector('span')?.textContent === '车辆 / 版本')?.querySelector('input');
+      setValue(routeSelect, 'route-smoke');
+      setValue(driverInput, 'Smoke driver');
+      setValue(vehicleInput, 'Smoke vehicle');
+      await new Promise(resolve => setTimeout(resolve, 50));
       document.querySelector('.run-card footer a.button-primary')?.click();
       const sessionOpened = await waitFor('.test-session-page');
+      const startGuidanceVisible = Boolean(document.querySelector('.session-controls .button-primary:not([disabled])')?.textContent?.includes('完成准备') && document.querySelector('.session-warning'));
+      for (let index = 0; index < 5; index += 1) {
+        document.querySelector('.preflight-list input:not(:checked)')?.click();
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      const startReady = await waitFor('.session-controls .button-primary');
+      const startButton = document.querySelector('.session-controls .button-primary');
+      const startActionAvailable = startReady && startButton?.textContent?.includes('开始测试') && !startButton.disabled;
+      startButton?.click();
+      const runStarted = await waitFor('.session-controls .button-secondary');
       let evidenceUploaded = false;
       if (sessionOpened) {
         const input = document.querySelector('.session-main .evidence-manager input[type="file"]');
@@ -90,12 +122,14 @@ app.whenReady().then(async () => {
       document.querySelector('.platform-nav a[href="#/planning"]')?.click();
       const planningOpened = await waitFor('.planning-page');
       const waypointModeDefault = document.querySelector('.planning-methods button.active strong')?.textContent?.includes('Waypoint');
-      return { createPanelOpened, projectCreated, runCreated, sessionOpened, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
+      return { createPanelOpened, projectCreated, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
     if (!interaction.runCreated) errors.push('Test run creation failed');
     if (!interaction.sessionOpened) errors.push('Live test session failed to open');
+    if (!interaction.startGuidanceVisible) errors.push('Test run preparation guidance is missing or start control is disabled');
+    if (!interaction.startActionAvailable || !interaction.runStarted) errors.push('Prepared test run could not be started');
     if (!interaction.evidenceUploaded) errors.push('IndexedDB evidence upload failed');
     if (!interaction.issueCreated) errors.push('Issue creation failed');
     if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
