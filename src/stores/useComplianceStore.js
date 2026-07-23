@@ -33,6 +33,7 @@ export const RUN_STATUSES = [
   { value: 'ready', label: '准备就绪' },
   { value: 'running', label: '执行中' },
   { value: 'paused', label: '已暂停' },
+  { value: 'review', label: '待复核' },
   { value: 'completed', label: '已完成' },
   { value: 'cancelled', label: '已取消' },
 ];
@@ -143,7 +144,8 @@ export const useComplianceStore = create((set, get) => ({
     const timestamp = now();
     const run = {
       id: createId('test-run'), name: `道路测试 ${new Date().toLocaleDateString('zh-CN')}`, routeId: '', date: timestamp.slice(0, 10),
-      driver: '', vehicle: '', weather: '', status: 'planned', distance: 0, scenarioIds: [], scenarioResults: {}, notes: '',
+      driver: '', vehicle: '', weather: '', status: 'planned', distance: 0, scenarioIds: [], scenarioResults: {}, notes: '', objective: '',
+      plannedStart: '', plannedEnd: '', testLead: '', reviewer: '', reviewNotes: '', reviewedAt: '', submittedAt: '', riskLevel: 'normal',
       checklist: defaultRunChecklist(), checkpoints: [], attachments: [], startedAt: '', endedAt: '', startOdometer: null, endOdometer: null,
       createdAt: timestamp, updatedAt: timestamp, ...values,
     };
@@ -157,36 +159,83 @@ export const useComplianceStore = create((set, get) => ({
     updateProjectCollection(get, set, projectId, project => withActivity({ ...project, testRuns: [...runs, ...project.testRuns], updatedAt: timestamp }, 'runs_created', `批量创建了 ${runs.length} 个测试任务`, '根据未完成测试场景生成'));
     return runs;
   },
+  duplicateTestRun: (projectId, runId) => {
+    const project = get().projects.find(item => item.id === projectId);
+    const source = project?.testRuns.find(item => item.id === runId);
+    if (!source) return null;
+    return get().addTestRun(projectId, {
+      name: `${source.name} · 重测`, routeId: source.routeId, date: now().slice(0, 10), driver: source.driver, vehicle: source.vehicle,
+      weather: '', objective: source.objective, plannedStart: source.plannedStart, plannedEnd: source.plannedEnd, testLead: source.testLead,
+      reviewer: source.reviewer, riskLevel: source.riskLevel, scenarioIds: [...source.scenarioIds], notes: `基于任务 ${source.name} 创建的重测任务。`,
+    });
+  },
   updateTestRun: (projectId, runId, updates) => updateProjectCollection(get, set, projectId, project => {
     const previous = project.testRuns.find(run => run.id === runId);
-    let next = { ...project, testRuns: project.testRuns.map(run => run.id === runId ? syncRunReadinessStatus({ ...run, ...updates, updatedAt: now() }) : run), updatedAt: now() };
-    if (updates.status && updates.status !== previous?.status) next = withActivity(next, 'run_status', '更新了测试执行状态', `${previous?.name || '测试执行'} · ${updates.status}`);
-    return next;
+    if (!previous || ['completed', 'cancelled'].includes(previous.status)) return project;
+    const mutableUpdates = Object.fromEntries(Object.entries(updates).filter(([key]) => key !== 'status'));
+    const allowedUpdates = previous.status === 'review'
+      ? Object.fromEntries(Object.entries(mutableUpdates).filter(([key]) => ['reviewer', 'reviewNotes'].includes(key)))
+      : mutableUpdates;
+    if (!Object.keys(allowedUpdates).length) return project;
+    return { ...project, testRuns: project.testRuns.map(run => run.id === runId ? syncRunReadinessStatus({ ...run, ...allowedUpdates, updatedAt: now() }) : run), updatedAt: now() };
   }),
-  setRunScenarioResult: (projectId, runId, scenarioId, updates) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId ? { ...run, scenarioResults: { ...run.scenarioResults, [scenarioId]: { status: 'not_started', notes: '', evidence: '', attachments: [], issueIds: [], ...(run.scenarioResults?.[scenarioId] || {}), ...updates, updatedAt: now() } }, updatedAt: now() } : run), updatedAt: now() })),
+  setRunScenarioResult: (projectId, runId, scenarioId, updates) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId && ['running', 'paused'].includes(run.status) ? { ...run, scenarioResults: { ...run.scenarioResults, [scenarioId]: { status: 'not_started', notes: '', evidence: '', attachments: [], issueIds: [], ...(run.scenarioResults?.[scenarioId] || {}), ...updates, updatedAt: now() } }, updatedAt: now() } : run), updatedAt: now() })),
   toggleRunChecklist: (projectId, runId, checklistId, checked) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => {
-    if (run.id !== runId) return run;
+    if (run.id !== runId || !['planned', 'ready', 'paused'].includes(run.status)) return run;
     const checklist = run.checklist.map(item => item.id === checklistId ? { ...item, checked } : item);
     return syncRunReadinessStatus({ ...run, checklist, updatedAt: now() });
   }), updatedAt: now() })),
   addRunCheckpoint: (projectId, runId, values = {}) => {
     const checkpoint = { id: createId('checkpoint'), timestamp: now(), label: '现场记录', notes: '', lat: null, lon: null, ...values };
-    updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId ? { ...run, checkpoints: [checkpoint, ...run.checkpoints], updatedAt: now() } : run), updatedAt: now() }));
-    return checkpoint;
+    let added = false;
+    updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => {
+      if (run.id !== runId || !['running', 'paused'].includes(run.status)) return run;
+      added = true;
+      return { ...run, checkpoints: [checkpoint, ...run.checkpoints], updatedAt: now() };
+    }), updatedAt: now() }));
+    return added ? checkpoint : null;
   },
-  deleteRunCheckpoint: (projectId, runId, checkpointId) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId ? { ...run, checkpoints: run.checkpoints.filter(item => item.id !== checkpointId), updatedAt: now() } : run), updatedAt: now() })),
+  deleteRunCheckpoint: (projectId, runId, checkpointId) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.map(run => run.id === runId && ['running', 'paused'].includes(run.status) ? { ...run, checkpoints: run.checkpoints.filter(item => item.id !== checkpointId), updatedAt: now() } : run), updatedAt: now() })),
   startTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => {
     const run = project.testRuns.find(item => item.id === runId);
-    if (!run || !getRunReadiness(run).ready) return project;
+    if (!run || ['review', 'completed', 'cancelled'].includes(run.status) || !getRunReadiness(run).ready || getRunResourceConflicts({ ...run, projectId }, get().projects).length) return project;
     const updated = { ...run, status: 'running', startedAt: run.startedAt || now(), endedAt: '', updatedAt: now() };
     return withActivity({ ...project, status: project.status === 'planning' ? 'running' : project.status, testRuns: project.testRuns.map(item => item.id === runId ? updated : item), updatedAt: now() }, 'run_started', '开始了道路测试', run.name);
   }),
   pauseTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => {
     const run = project.testRuns.find(item => item.id === runId);
-    return run ? withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? { ...item, status: 'paused', updatedAt: now() } : item), updatedAt: now() }, 'run_paused', '暂停了道路测试', run.name) : project;
+    return run?.status === 'running' ? withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? { ...item, status: 'paused', updatedAt: now() } : item), updatedAt: now() }, 'run_paused', '暂停了道路测试', run.name) : project;
   }),
-  completeTestRun: (projectId, runId, updates = {}) => updateProjectCollection(get, set, projectId, project => completeRunInProject(project, runId, updates)),
-  deleteTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => ({ ...project, testRuns: project.testRuns.filter(run => run.id !== runId), issues: project.issues.map(issue => issue.runId === runId ? { ...issue, runId: '' } : issue), updatedAt: now() })),
+  submitTestRun: (projectId, runId, updates = {}) => updateProjectCollection(get, set, projectId, project => {
+    const run = project.testRuns.find(item => item.id === runId);
+    if (!run || !['running', 'paused'].includes(run.status)) return project;
+    const submitted = prepareRunForReview(run, updates);
+    return withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? submitted : item), updatedAt: now() }, 'run_submitted', '提交了测试复核', run.name);
+  }),
+  approveTestRun: (projectId, runId, updates = {}) => updateProjectCollection(get, set, projectId, project => {
+    const run = project.testRuns.find(item => item.id === runId);
+    if (!run || run.status !== 'review' || !(updates.reviewer || run.reviewer)?.trim()) return project;
+    return completeRunInProject(project, runId, { ...updates, reviewer: (updates.reviewer || run.reviewer).trim(), reviewedAt: now() });
+  }),
+  returnTestRun: (projectId, runId, updates = {}) => updateProjectCollection(get, set, projectId, project => {
+    const run = project.testRuns.find(item => item.id === runId);
+    const reviewer = (updates.reviewer || run?.reviewer || '').trim();
+    const reviewNotes = (updates.reviewNotes || run?.reviewNotes || '').trim();
+    if (!run || run.status !== 'review' || !reviewer || !reviewNotes) return project;
+    const returned = { ...run, ...updates, reviewer, reviewNotes, status: 'paused', endedAt: '', submittedAt: '', reviewedAt: '', updatedAt: now() };
+    return withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? returned : item), updatedAt: now() }, 'run_returned', '退回了测试任务', `${run.name} · ${reviewNotes}`);
+  }),
+  cancelTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => {
+    const run = project.testRuns.find(item => item.id === runId);
+    if (!run || !['planned', 'ready', 'paused'].includes(run.status)) return project;
+    const cancelled = { ...run, status: 'cancelled', endedAt: run.endedAt || now(), updatedAt: now() };
+    return withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? cancelled : item), updatedAt: now() }, 'run_cancelled', '取消了测试任务', run.name);
+  }),
+  deleteTestRun: (projectId, runId) => updateProjectCollection(get, set, projectId, project => {
+    const run = project.testRuns.find(item => item.id === runId);
+    if (run?.status !== 'cancelled') return project;
+    return { ...project, testRuns: project.testRuns.filter(item => item.id !== runId), issues: project.issues.map(issue => issue.runId === runId ? { ...issue, runId: '' } : issue), updatedAt: now() };
+  }),
 
   addIssue: (projectId, values = {}) => {
     const timestamp = now();
@@ -201,7 +250,7 @@ export const useComplianceStore = create((set, get) => ({
     const timestamp = now();
     const project = get().projects.find(item => item.id === projectId);
     const run = project?.testRuns.find(item => item.id === runId);
-    if (!project || !run) return null;
+    if (!project || !run || !['running', 'paused'].includes(run.status)) return null;
     const issue = normalizeIssue({ id: createId('issue'), title: '测试场景异常', severity: 'high', status: 'open', routeId: run.routeId, runId, scenarioId, assignee: project.owner, createdAt: timestamp, updatedAt: timestamp, ...values });
     updateProjectCollection(get, set, projectId, current => {
       const testRuns = current.testRuns.map(item => {
@@ -289,11 +338,25 @@ export function getRunReadiness(run, routes) {
   };
 }
 
+export function getRunResourceConflicts(run, projectsOrRuns = []) {
+  if (!run?.date) return [];
+  const runs = projectsOrRuns.flatMap(item => Array.isArray(item?.testRuns)
+    ? item.testRuns.map(candidate => ({ ...candidate, projectId: item.id }))
+    : [item]);
+  const peers = runs.filter(item => item?.id !== run.id && item?.date === run.date && ['planned', 'ready', 'running', 'paused'].includes(item?.status));
+  const conflicts = [];
+  if (run.driver && peers.some(item => item.driver === run.driver && runTimeWindowsOverlap(run, item))) conflicts.push('驾驶员时间冲突');
+  if (run.vehicle && peers.some(item => item.vehicle === run.vehicle && runTimeWindowsOverlap(run, item))) conflicts.push('车辆时间冲突');
+  return conflicts;
+}
+
 function normalizeRun(run = {}) {
   const timestamp = run.createdAt || now();
   return {
     id: run.id || createId('test-run'), name: run.name || '道路测试', routeId: run.routeId || '', date: run.date || '',
     driver: run.driver || '', vehicle: run.vehicle || '', weather: run.weather || '', status: run.status || 'planned', distance: Number(run.distance) || 0,
+    objective: run.objective || '', plannedStart: run.plannedStart || '', plannedEnd: run.plannedEnd || '', testLead: run.testLead || '',
+    reviewer: run.reviewer || '', reviewNotes: run.reviewNotes || '', reviewedAt: run.reviewedAt || '', submittedAt: run.submittedAt || '', riskLevel: run.riskLevel || 'normal',
     scenarioIds: Array.isArray(run.scenarioIds) ? run.scenarioIds : [], scenarioResults: run.scenarioResults && typeof run.scenarioResults === 'object' ? run.scenarioResults : {},
     checklist: Array.isArray(run.checklist) && run.checklist.length ? run.checklist : defaultRunChecklist(),
     checkpoints: Array.isArray(run.checkpoints) ? run.checkpoints : [], attachments: Array.isArray(run.attachments) ? run.attachments : [],
@@ -305,6 +368,11 @@ function normalizeRun(run = {}) {
 function syncRunReadinessStatus(run) {
   if (!['planned', 'ready'].includes(run.status)) return run;
   return { ...run, status: getRunReadiness(run).ready ? 'ready' : 'planned' };
+}
+
+function runTimeWindowsOverlap(first, second) {
+  if (!first.plannedStart || !first.plannedEnd || !second.plannedStart || !second.plannedEnd) return true;
+  return first.plannedStart < second.plannedEnd && second.plannedStart < first.plannedEnd;
 }
 
 function normalizeIssue(issue = {}) {
@@ -328,7 +396,7 @@ function completeRunInProject(project, runId, updates) {
   const endOdometer = toNullableNumber(updates.endOdometer ?? run.endOdometer);
   const startOdometer = toNullableNumber(updates.startOdometer ?? run.startOdometer);
   const calculatedDistance = startOdometer !== null && endOdometer !== null && endOdometer >= startOdometer ? Number((endOdometer - startOdometer).toFixed(1)) : Number(updates.distance ?? run.distance) || 0;
-  const completedRun = { ...run, ...updates, status: 'completed', endedAt: updates.endedAt || now(), startOdometer, endOdometer, distance: calculatedDistance, updatedAt: now() };
+  const completedRun = { ...run, ...updates, status: 'completed', endedAt: updates.endedAt || run.endedAt || now(), reviewedAt: updates.reviewedAt || run.reviewedAt || now(), startOdometer, endOdometer, distance: calculatedDistance, updatedAt: now() };
   const results = { ...(project.results || {}) };
   completedRun.scenarioIds.forEach(scenarioId => {
     const runResult = completedRun.scenarioResults?.[scenarioId];
@@ -347,6 +415,14 @@ function completeRunInProject(project, runId, updates) {
     };
   });
   return withActivity({ ...project, testRuns: project.testRuns.map(item => item.id === runId ? completedRun : item), results, updatedAt: now() }, 'run_completed', '完成了道路测试', `${run.name} · ${calculatedDistance || 0} km`);
+}
+
+function prepareRunForReview(run, updates) {
+  const endOdometer = toNullableNumber(updates.endOdometer ?? run.endOdometer);
+  const startOdometer = toNullableNumber(updates.startOdometer ?? run.startOdometer);
+  const calculatedDistance = startOdometer !== null && endOdometer !== null && endOdometer >= startOdometer ? Number((endOdometer - startOdometer).toFixed(1)) : Number(updates.distance ?? run.distance) || 0;
+  const timestamp = now();
+  return { ...run, ...updates, status: 'review', submittedAt: timestamp, endedAt: timestamp, startOdometer, endOdometer, distance: calculatedDistance, updatedAt: timestamp };
 }
 
 function toNullableNumber(value) {

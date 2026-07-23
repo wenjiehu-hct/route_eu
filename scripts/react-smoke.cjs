@@ -31,6 +31,7 @@ app.whenReady().then(async () => {
     if (!useDist) await waitForServer();
     const window = new BrowserWindow({ show: false, width: Number(process.env.SMOKE_WIDTH) || 1440, height: 960, webPreferences: { contextIsolation: true, sandbox: true } });
     window.webContents.on('console-message', event => {
+      if (event.message.startsWith('[smoke]')) process.stderr.write(`${event.message}\n`);
       if (event.level === 'error') errors.push(event.message);
     });
     window.webContents.on('render-process-gone', (_event, details) => {
@@ -57,6 +58,9 @@ app.whenReady().then(async () => {
     await reloaded;
     await new Promise(resolve => setTimeout(resolve, 1200));
     const interaction = await window.webContents.executeJavaScript(`(async () => {
+      console.log('[smoke] interaction-start');
+      window.confirm = () => true;
+      window.alert = () => {};
       const waitFor = async selector => {
         for (let index = 0; index < 30; index += 1) {
           if (document.querySelector(selector)) return true;
@@ -89,7 +93,7 @@ app.whenReady().then(async () => {
         await waitFor('.run-editor');
       }
       const setValue = (element, value) => {
-        const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+        const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
         element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
       };
@@ -103,7 +107,7 @@ app.whenReady().then(async () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       document.querySelector('.run-card footer a.button-primary')?.click();
       const sessionOpened = await waitFor('.test-session-page');
-      const startGuidanceVisible = Boolean(document.querySelector('.session-controls .button-primary:not([disabled])')?.textContent?.includes('完成准备') && document.querySelector('.session-warning'));
+      const startGuidanceVisible = Boolean(document.querySelector('.session-controls .button-primary:not([disabled])')?.textContent?.includes('解除阻塞') && document.querySelector('.session-warning'));
       for (let index = 0; index < 5; index += 1) {
         document.querySelector('.preflight-list input:not(:checked)')?.click();
         await new Promise(resolve => setTimeout(resolve, 20));
@@ -113,6 +117,7 @@ app.whenReady().then(async () => {
       const startActionAvailable = startReady && startButton?.textContent?.includes('开始测试') && !startButton.disabled;
       startButton?.click();
       const runStarted = await waitFor('.session-controls .button-secondary');
+      console.log('[smoke] run-started');
       let evidenceUploaded = false;
       if (sessionOpened) {
         const input = document.querySelector('.session-main .evidence-manager input[type="file"]');
@@ -122,12 +127,41 @@ app.whenReady().then(async () => {
         input.dispatchEvent(new Event('change', { bubbles: true }));
         evidenceUploaded = await waitFor('.session-main .evidence-files article');
       }
+      console.log('[smoke] evidence-uploaded');
+      const liveScenarioCount = document.querySelectorAll('.live-scenario-card').length;
+      for (let index = 0; index < liveScenarioCount; index += 1) {
+        const card = document.querySelectorAll('.live-scenario-card')[index];
+        const resultSelect = card?.querySelector('select');
+        const evidenceInput = card?.querySelector('.live-scenario-fields input');
+        if (resultSelect) setValue(resultSelect, 'passed');
+        await new Promise(resolve => setTimeout(resolve, 30));
+        const refreshedEvidenceInput = document.querySelectorAll('.live-scenario-card')[index]?.querySelector('.live-scenario-fields input') || evidenceInput;
+        if (refreshedEvidenceInput) setValue(refreshedEvidenceInput, 'smoke-evidence-' + (index + 1));
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('[smoke] scenarios-filled');
+      [...document.querySelectorAll('.session-controls button')].find(button => button.textContent.includes('提交复核'))?.click();
+      const runSubmitted = await waitFor('.review-decision-card');
+      console.log('[smoke] run-submitted');
+      const reviewerInput = document.querySelector('.review-decision-card input');
+      const reviewNotes = document.querySelector('.review-decision-card textarea');
+      if (reviewerInput) setValue(reviewerInput, 'Smoke reviewer');
+      if (reviewNotes) setValue(reviewNotes, 'Evidence and scenario results accepted.');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      document.querySelector('.review-decision-card .button-primary')?.click();
+      const runApproved = await waitUntil(() => [...document.querySelectorAll('.session-controls button')].some(button => button.textContent.includes('创建重测任务')));
+      console.log('[smoke] run-approved');
       window.history.back();
       await waitFor('.project-tabs');
       document.querySelectorAll('.project-tabs button')[3]?.click();
       await waitFor('.issues-panel');
       document.querySelector('.issues-panel .card-actions .button-primary')?.click();
       const issueCreated = await waitFor('.issue-card');
+      console.log('[smoke] issue-created');
+      document.querySelector('.platform-nav a[href="#/execution"]')?.click();
+      const operationsBoardOpened = await waitFor('.operations-board');
+      console.log('[smoke] operations-opened');
       document.querySelector('.platform-nav a[href="#/routes"]')?.click();
       const routeCenterOpened = await waitFor('.route-assets-page');
       const routeMapMounted = await waitFor('.leaflet-container');
@@ -136,11 +170,13 @@ app.whenReady().then(async () => {
       const waypointModeDefault = document.querySelector('.planning-methods button.active strong')?.textContent?.includes('Waypoint');
       document.querySelector('.platform-nav a[href="#/data"]')?.click();
       const dataCenterOpened = await waitFor('.data-page');
+      console.log('[smoke] data-opened');
       const localDatabaseReady = Boolean(document.querySelector('.local-database-card')?.textContent?.includes('IndexedDB'));
       const snapshotInput = document.querySelector('.snapshot-composer input');
       if (snapshotInput) setValue(snapshotInput, 'Smoke persistence snapshot');
       document.querySelector('.snapshot-composer .button-primary')?.click();
       const snapshotCreated = await waitUntil(() => [...document.querySelectorAll('.snapshot-history > div')].some(row => row.textContent.includes('Smoke persistence snapshot')));
+      console.log('[smoke] snapshot-created');
       const localDataPersisted = await new Promise(resolve => {
         const request = indexedDB.open('globalRoadTestWorkspace');
         request.onsuccess = () => {
@@ -151,7 +187,7 @@ app.whenReady().then(async () => {
         };
         request.onerror = () => resolve(false);
       });
-      return { createPanelOpened, projectCreated, projectReadinessVisible, readinessLayoutStable, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault, dataCenterOpened, localDatabaseReady, snapshotCreated, localDataPersisted };
+      return { createPanelOpened, projectCreated, projectReadinessVisible, readinessLayoutStable, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, runSubmitted, runApproved, evidenceUploaded, issueCreated, operationsBoardOpened, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault, dataCenterOpened, localDatabaseReady, snapshotCreated, localDataPersisted };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
@@ -161,8 +197,10 @@ app.whenReady().then(async () => {
     if (!interaction.sessionOpened) errors.push('Live test session failed to open');
     if (!interaction.startGuidanceVisible) errors.push('Test run preparation guidance is missing or start control is disabled');
     if (!interaction.startActionAvailable || !interaction.runStarted) errors.push('Prepared test run could not be started');
+    if (!interaction.runSubmitted || !interaction.runApproved) errors.push('Test run review and approval workflow failed');
     if (!interaction.evidenceUploaded) errors.push('IndexedDB evidence upload failed');
     if (!interaction.issueCreated) errors.push('Issue creation failed');
+    if (!interaction.operationsBoardOpened) errors.push('Global test operations board failed to open');
     if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
     if (!interaction.planningOpened) errors.push('Planning center failed to open');
     if (!interaction.waypointModeDefault) errors.push('Waypoint planning is not the default planning mode');
@@ -194,3 +232,15 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', event => event.preventDefault());
+
+process.on('uncaughtException', error => {
+  process.stderr.write(`${error.stack || error.message}\n`);
+  vite?.kill();
+  app.exit(1);
+});
+
+process.on('unhandledRejection', error => {
+  process.stderr.write(`${error?.stack || error}\n`);
+  vite?.kill();
+  app.exit(1);
+});

@@ -436,6 +436,36 @@ textarea { resize: vertical; }
 .execution-context-bar nav { display: flex; gap: 3px; padding: 3px; border-radius: 8px; background: #eff3f7; }
 .execution-context-bar nav button { border: 0; border-radius: 6px; padding: 7px 12px; color: #6f7f91; background: transparent; font-size: 9px; }
 .execution-context-bar nav button.active { color: #245f9f; background: #fff; box-shadow: 0 1px 5px rgba(18,47,77,.1); }
+.create-execution-panel { border: 1px solid #a9c8e8; border-radius: 13px; background: #fff; box-shadow: var(--shadow-md); overflow: hidden; }
+.create-execution-panel > header { display: flex; justify-content: space-between; padding: 16px 18px 14px; color: #fff; background: linear-gradient(120deg,#0b2847,#1d619c); }
+.create-execution-panel header span { color: #82b9eb; font-size: 8px; font-weight: 900; letter-spacing: 1.2px; }
+.create-execution-panel h2 { margin: 3px 0; font-size: 18px; }
+.create-execution-panel header p { margin: 0; color: #b6cee3; font-size: 9px; }
+.create-execution-panel header button { align-self: flex-start; border: 0; color: #bed3e6; background: transparent; font-size: 22px; }
+.create-execution-panel > .form-grid, .create-execution-panel > .scenario-picker, .create-execution-panel > .notice, .create-execution-panel > .toolbar-row { margin: 14px 16px; }
+.operations-toolbar { display: grid; grid-template-columns: minmax(280px,1fr) 180px auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+.operations-toolbar > span { color: #7c8b9c; font-size: 8px; text-align: right; }
+.operations-run-list { overflow-x: auto; }
+.operations-run-row { display: grid; grid-template-columns: 100px minmax(210px,1.35fr) 120px 150px 175px 125px; gap: 11px; align-items: center; min-width: 1020px; min-height: 88px; border-top: 1px solid var(--line-soft); padding: 10px 3px; }
+.operations-run-row:first-child { border-top: 0; }
+.operations-run-row.status-running { margin-inline: -7px; border: 1px solid #9ec4ea; border-radius: 9px; padding-inline: 10px; background: #f1f8ff; }
+.operations-run-status { display: flex; flex-wrap: wrap; gap: 4px; }
+.operations-run-main, .operations-run-plan, .operations-run-resource, .operations-run-route, .operations-run-action { display: flex; min-width: 0; flex-direction: column; }
+.operations-run-main > a { overflow: hidden; color: #204f82; font-size: 10px; font-weight: 800; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.operations-run-main span, .operations-run-main small, .operations-run-plan small, .operations-run-resource span, .operations-run-resource small, .operations-run-route span, .operations-run-action small { overflow: hidden; color: #8190a1; font-size: 7px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.operations-run-main span { margin-top: 3px; color: #54718d; font-size: 8px; }
+.operations-run-plan > span { color: #316da8; font-size: 8px; font-weight: 750; }
+.operations-run-plan strong, .operations-run-resource strong, .operations-run-route strong { margin: 3px 0; overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.operations-run-route .progress-track { width: 90%; height: 4px; margin-top: 5px; }
+.operations-run-action { align-items: stretch; gap: 4px; }
+.operations-run-action small { text-align: center; }
+.operations-issue-list { overflow-x: auto; }
+.operations-issue-list article { display: grid; grid-template-columns: 10px minmax(230px,1fr) 110px 100px 80px 65px; gap: 10px; align-items: center; min-width: 760px; min-height: 50px; border-top: 1px solid var(--line-soft); font-size: 8px; }
+.operations-issue-list article:first-child { border: 0; }
+.operations-issue-list article > div { display: flex; min-width: 0; flex-direction: column; }
+.operations-issue-list article a { color: #2868ad; text-decoration: none; }
+.operations-issue-list article > div > a { overflow: hidden; font-size: 9px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.operations-issue-list article span, .operations-issue-list time { color: #8391a1; font-size: 7px; }
 .calendar-legend { display: flex; align-items: center; gap: 5px; color: #758395; }
 .calendar-legend i { width: 7px; height: 7px; border-radius: 50%; }
 .calendar-legend i.run { background: #347cc9; }
@@ -722,6 +752,13 @@ textarea { resize: vertical; }
 .session-warning.attention { border-color: #dcae45; box-shadow: 0 0 0 3px rgba(220,174,69,.15); }
 .session-warning span { color: #8d6b23; }
 .session-layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(340px,.62fr); gap: 14px; align-items: start; }
+.review-decision-card { border-color: #a9c8e6; box-shadow: 0 5px 18px rgba(24,76,126,.1); }
+.review-decision-card > .card-header { color: #fff; background: linear-gradient(120deg,#133b60,#236ca8); }
+.review-decision-card > .card-header p { color: #b9d2e7; }
+.review-summary { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 13px; }
+.review-summary span { display: flex; flex-direction: column; border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px; background: #f7f9fc; }
+.review-summary small { color: #8291a2; font-size: 7px; }
+.review-summary strong { margin-top: 4px; font-size: 14px; }
 .session-main, .session-sidebar { display: flex; min-width: 0; flex-direction: column; gap: 13px; }
 .live-scenario-list { display: flex; flex-direction: column; gap: 9px; }
 .live-scenario-card { border: 1px solid #dfe6ef; border-left: 4px solid #a9b5c2; border-radius: 9px; padding: 11px; background: white; }
@@ -757,6 +794,8 @@ textarea { resize: vertical; }
 .preflight-list label { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; border: 1px solid #dfe6ef; border-radius: 8px; padding: 8px; cursor: pointer; }
 .preflight-list label.checked { border-color: #b8dfcb; background: #f0faf5; }
 .preflight-list input { position: absolute; opacity: 0; }
+.preflight-list input:disabled + span { opacity: .65; }
+.preflight-list label:has(input:disabled) { cursor: default; }
 .preflight-list label > span { display: grid; place-items: center; width: 21px; height: 21px; border: 1px solid #aebdcb; border-radius: 6px; color: white; font-size: 9px; }
 .preflight-list label.checked > span { border-color: #31a571; background: #31a571; }
 .preflight-list strong { color: #56677b; font-size: 8px; font-weight: 650; }

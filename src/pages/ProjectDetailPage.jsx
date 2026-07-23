@@ -7,7 +7,7 @@ import { COMPLIANCE_SCENARIOS, getComplianceProfile } from '../constants/complia
 import { bestRouteForScenario } from '../services/compliance.js';
 import { flattenRoutes, formatDate, getProjectMetrics, relativeTime } from '../services/portfolio.js';
 import { formatKm } from '../services/utils.js';
-import { ISSUE_STATUSES, PRIORITIES, PROJECT_PHASES, PROJECT_STATUSES, RUN_STATUSES, getRunReadiness, useComplianceStore } from '../stores/useComplianceStore.js';
+import { ISSUE_STATUSES, PRIORITIES, PROJECT_PHASES, PROJECT_STATUSES, RUN_STATUSES, getRunReadiness, getRunResourceConflicts, useComplianceStore } from '../stores/useComplianceStore.js';
 import { useCoveragePlannerStore } from '../stores/useCoveragePlannerStore.js';
 import { useRoutePlannerStore } from '../stores/useRoutePlannerStore.js';
 
@@ -148,11 +148,13 @@ export function TestRunsPanel({ project, routes, store, compact = false }) {
   const add = () => { const run = store.addTestRun(project.id, { routeId: projectRoutes[0]?.id || '', vehicle: project.vehicle, scenarioIds: profile.scenarios.slice(0, 3) }); setEditingId(run.id); };
   const openRun = run => navigate(`/execution/${project.id}/${run.id}`);
   const startRun = run => { store.startTestRun(project.id, run.id); openRun(run); };
-  const renderRunAction = (run, readiness) => {
+  const renderRunAction = (run, readiness, conflicts) => {
     if (run.status === 'running') return <Link className="button button-primary button-sm" to={`/execution/${project.id}/${run.id}`}>进入现场会话</Link>;
-    if (run.status === 'completed') return <Link className="button button-secondary button-sm" to={`/execution/${project.id}/${run.id}`}>查看执行记录</Link>;
+    if (run.status === 'review') return <Link className="button button-primary button-sm" to={`/execution/${project.id}/${run.id}`}>进入工程复核</Link>;
+    if (run.status === 'completed') return <Link className="button button-secondary button-sm" to={`/execution/${project.id}/${run.id}`}>查看归档记录</Link>;
     if (run.status === 'cancelled') return <Link className="button button-secondary button-sm" to={`/execution/${project.id}/${run.id}`}>查看任务</Link>;
-    if (readiness.ready) return <Button variant="primary" size="sm" onClick={() => startRun(run)}>{run.status === 'paused' ? '继续任务' : '开始任务'}</Button>;
+    if (readiness.ready && !conflicts.length) return <Button variant="primary" size="sm" onClick={() => startRun(run)}>{run.status === 'paused' ? '继续任务' : '开始任务'}</Button>;
+    if (conflicts.length) return <Link className="button button-primary button-sm" to={`/execution/${project.id}/${run.id}`}>解决资源冲突</Link>;
     return <Link className="button button-primary button-sm" to={`/execution/${project.id}/${run.id}`}>完成准备 · 还差 {readiness.missing.length} 项</Link>;
   };
   const generate = () => {
@@ -176,12 +178,14 @@ export function TestRunsPanel({ project, routes, store, compact = false }) {
     {!visibleRuns.length ? <EmptyState icon="RUN" title="没有测试执行任务" description="创建任务并分配路线、驾驶员、车辆和测试场景。" action={<Button variant="primary" onClick={add}>创建首个任务</Button>} /> : <div className="run-list">
       {visibleRuns.map(run => {
         const readiness = getRunReadiness(run, routes);
+        const conflicts = getRunResourceConflicts({ ...run, projectId: project.id }, store.projects);
+        const dispatchReady = readiness.ready && !conflicts.length;
         return <article key={run.id} className={`run-card ${editingId === run.id ? 'editing' : ''}`}>
         <header><div><time>{run.date || '日期待定'}</time><strong>{run.name}</strong><span>{routes.find(route => route.id === run.routeId)?.name || '路线待分配'} · {run.driver || '驾驶员待指派'}</span></div><StatusBadge value={run.status} labels={RUN_LABELS} /></header>
         <div className="run-summary"><span><small>车辆/版本</small><strong>{run.vehicle || project.vehicle || '未设置'}</strong></span><span><small>天气</small><strong>{run.weather || '未记录'}</strong></span><span><small>里程</small><strong>{run.distance ? `${run.distance} km` : '待回填'}</strong></span><span><small>测试场景</small><strong>{run.scenarioIds.length}</strong></span></div>
-        {!['running', 'completed'].includes(run.status) && <div className={`run-readiness ${readiness.ready ? 'ready' : ''}`}><div><span>任务准备度</span><strong>{readiness.completed}/{readiness.total}</strong></div><ProgressBar value={readiness.completed / readiness.total * 100} tone={readiness.ready ? 'green' : 'blue'} /><small>{readiness.ready ? '路线、人员、车辆和行前检查均已就绪' : readiness.missing.slice(0, 3).map(item => item.label).join(' · ')}</small></div>}
+        {!['running', 'review', 'completed', 'cancelled'].includes(run.status) && <div className={`run-readiness ${dispatchReady ? 'ready' : ''}`}><div><span>任务准备度</span><strong>{readiness.completed}/{readiness.total}</strong></div><ProgressBar value={readiness.completed / readiness.total * 100} tone={dispatchReady ? 'green' : 'blue'} /><small>{conflicts.length ? conflicts.join(' · ') : readiness.ready ? '路线、人员、车辆和行前检查均已就绪' : readiness.missing.slice(0, 3).map(item => item.label).join(' · ')}</small></div>}
         {editingId === run.id && <RunEditor project={project} run={run} routes={routes} store={store} />}
-        <footer>{renderRunAction(run, readiness)}<Button size="sm" onClick={() => setEditingId(editingId === run.id ? null : run.id)}>{editingId === run.id ? '收起编辑' : '编辑任务'}</Button>{run.status === 'running' && <Button size="sm" onClick={() => store.pauseTestRun(project.id, run.id)}>暂停</Button>}<Button size="sm" variant="danger" onClick={() => { if (window.confirm(`删除测试任务“${run.name}”？`)) store.deleteTestRun(project.id, run.id); }}>删除</Button></footer>
+        <footer>{renderRunAction(run, readiness, conflicts)}{!['review', 'completed', 'cancelled'].includes(run.status) && <Button size="sm" onClick={() => setEditingId(editingId === run.id ? null : run.id)}>{editingId === run.id ? '收起编辑' : '编辑任务'}</Button>}{run.status === 'running' && <Button size="sm" onClick={() => store.pauseTestRun(project.id, run.id)}>暂停</Button>}{run.status === 'completed' && <Button size="sm" onClick={() => { const retry = store.duplicateTestRun(project.id, run.id); if (retry) setEditingId(retry.id); }}>创建重测任务</Button>}{['planned', 'ready', 'paused'].includes(run.status) && <Button size="sm" variant="danger" onClick={() => { if (window.confirm(`取消测试任务“${run.name}”？记录会保留在项目中。`)) store.cancelTestRun(project.id, run.id); }}>取消任务</Button>}{run.status === 'cancelled' && <Button size="sm" variant="danger" onClick={() => { if (window.confirm(`永久删除已取消任务“${run.name}”？`)) store.deleteTestRun(project.id, run.id); }}>删除记录</Button>}</footer>
       </article>;
       })}
     </div>}
@@ -200,12 +204,18 @@ function RunEditor({ project, run, routes, store }) {
     <div className="form-grid">
       <label className="field span-2"><span>任务名称</span><input value={run.name} onChange={event => update('name', event.target.value)} /></label>
       <label className="field"><span>计划/执行日期</span><input type="date" value={run.date} onChange={event => update('date', event.target.value)} /></label>
-      <label className="field"><span>状态</span><select value={run.status} onChange={event => update('status', event.target.value)}>{RUN_STATUSES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      <label className="field"><span>任务状态</span><input value={RUN_LABELS[run.status] || run.status} disabled /></label>
+      <label className="field"><span>计划开始</span><input type="time" value={run.plannedStart} onChange={event => update('plannedStart', event.target.value)} /></label>
+      <label className="field"><span>计划结束</span><input type="time" value={run.plannedEnd} onChange={event => update('plannedEnd', event.target.value)} /></label>
       <label className="field"><span>测试路线</span><select value={run.routeId} onChange={event => selectRoute(event.target.value)}><option value="">未分配</option>{routes.map(route => <option key={route.id} value={route.id}>{route.name}{project.routeIds.includes(route.id) ? '' : '（选择后加入项目）'}</option>)}</select></label>
       <label className="field"><span>驾驶员</span><input value={run.driver} onChange={event => update('driver', event.target.value)} /></label>
       <label className="field"><span>车辆 / 版本</span><input value={run.vehicle} onChange={event => update('vehicle', event.target.value)} /></label>
+      <label className="field"><span>测试负责人</span><input value={run.testLead} onChange={event => update('testLead', event.target.value)} /></label>
+      <label className="field"><span>复核人</span><input value={run.reviewer} onChange={event => update('reviewer', event.target.value)} /></label>
+      <label className="field"><span>任务风险</span><select value={run.riskLevel} onChange={event => update('riskLevel', event.target.value)}><option value="normal">常规道路测试</option><option value="elevated">较高风险 / 需专项交底</option><option value="controlled">仅限封闭或受控场地</option></select></label>
       <label className="field"><span>天气 / 路况</span><input value={run.weather} onChange={event => update('weather', event.target.value)} placeholder="晴 / 12°C / 干燥" /></label>
       <label className="field"><span>实测里程（km）</span><input type="number" min="0" value={run.distance || ''} onChange={event => update('distance', Number(event.target.value) || 0)} /></label>
+      <label className="field span-2"><span>测试目标与验收边界</span><textarea rows="2" value={run.objective} onChange={event => update('objective', event.target.value)} placeholder="说明本次要验证什么、通过条件和禁止事项" /></label>
       <label className="field span-2"><span>现场记录</span><textarea rows="3" value={run.notes} onChange={event => update('notes', event.target.value)} placeholder="记录异常、数据包、真值采集和测试限制" /></label>
     </div>
     <div className="scenario-picker"><strong>本次执行场景</strong><div>{profile.scenarios.map(id => <label key={id}><input type="checkbox" checked={run.scenarioIds.includes(id)} onChange={() => toggleScenario(id)} /><span>{COMPLIANCE_SCENARIOS[id]?.name || id}</span></label>)}</div></div>

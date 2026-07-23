@@ -41,6 +41,6 @@ export function StatCard({ label, value, detail, tone = 'blue', icon = '·', tre
 }
 
 export function StatusBadge({ value, labels = {}, tone }) {
-  const autoTone = tone || ({ completed: 'green', passed: 'green', verified: 'green', closed: 'green', running: 'blue', investigating: 'blue', planning: 'neutral', planned: 'neutral', paused: 'amber', blocked: 'amber', failed: 'red', critical: 'red', high: 'amber' })[value] || 'neutral';
+  const autoTone = tone || ({ completed: 'green', passed: 'green', verified: 'green', closed: 'green', running: 'blue', review: 'blue', investigating: 'blue', planning: 'neutral', planned: 'neutral', paused: 'amber', blocked: 'amber', failed: 'red', critical: 'red', high: 'amber' })[value] || 'neutral';
   return <Chip tone={autoTone}>{labels[value] || value || '未设置'}</Chip>;
 }

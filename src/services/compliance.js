@@ -101,12 +101,12 @@ export function buildProjectReport(project, routes) {
     lines.push(`| ${escapeCell(scenario.category)} | ${escapeCell(scenario.name)} | ${escapeCell(scenario.targetLabel || '')} | ${escapeCell(best?.analysis.label || '需人工验证')} | ${status} | ${escapeCell(selectedRoute?.name || best?.route?.name || '')} | ${escapeCell(result.notes || '')} |`);
   });
 
-  lines.push('', '## 测试执行', '', '| 日期 | 测试任务 | 路线 | 驾驶员 | 车辆 | 状态 | 里程 |', '|---|---|---|---|---|---|---|');
-  if (!(project.testRuns || []).length) lines.push('| - | 暂无测试执行 | - | - | - | - | - |');
+  lines.push('', '## 测试执行', '', '| 日期 | 测试任务 | 路线 | 驾驶员 | 车辆 | 状态 | 里程 | 复核人 | 复核时间 |', '|---|---|---|---|---|---|---|---|---|');
+  if (!(project.testRuns || []).length) lines.push('| - | 暂无测试执行 | - | - | - | - | - | - | - |');
   (project.testRuns || []).forEach(run => {
     const route = routeMap.get(run.routeId);
-    const status = ({ planned: '待执行', ready: '准备就绪', running: '执行中', paused: '已暂停', completed: '已完成', cancelled: '已取消' })[run.status] || run.status;
-    lines.push(`| ${escapeCell(run.date || '')} | ${escapeCell(run.name)} | ${escapeCell(route?.name || '')} | ${escapeCell(run.driver || '')} | ${escapeCell(run.vehicle || '')} | ${escapeCell(status)} | ${escapeCell(run.distance ? `${run.distance} km` : '')} |`);
+    const status = ({ planned: '待执行', ready: '准备就绪', running: '执行中', paused: '已暂停', review: '待复核', completed: '已完成', cancelled: '已取消' })[run.status] || run.status;
+    lines.push(`| ${escapeCell(run.date || '')} | ${escapeCell(run.name)} | ${escapeCell(route?.name || '')} | ${escapeCell(run.driver || '')} | ${escapeCell(run.vehicle || '')} | ${escapeCell(status)} | ${escapeCell(run.distance ? `${run.distance} km` : '')} | ${escapeCell(run.reviewer || '')} | ${escapeCell(run.reviewedAt ? new Date(run.reviewedAt).toLocaleString('zh-CN') : '')} |`);
   });
 
   (project.testRuns || []).forEach(run => {
@@ -118,6 +118,7 @@ export function buildProjectReport(project, routes) {
       const status = TEST_STATUSES.find(item => item.value === result.status)?.label || '未开始';
       lines.push(`| ${escapeCell(scenario?.name || id)} | ${escapeCell(status)} | ${escapeCell(result.notes)} | ${escapeCell(result.evidence)} | ${(result.attachments || []).length} |`);
     });
+    if (run.reviewNotes) lines.push('', `复核意见：${run.reviewNotes}`);
     if ((run.attachments || []).length) lines.push('', `任务附件：${run.attachments.map(item => item.name).join('、')}`);
   });
 
@@ -155,17 +156,17 @@ export function buildProjectReport(project, routes) {
 
 export function buildProjectCsv(project, routes) {
   const routeMap = new Map(routes.map(route => [route.id, route]));
-  const rows = [['record_type', 'project', 'date', 'test_run', 'route', 'scenario', 'status', 'driver', 'vehicle', 'distance_km', 'issue', 'severity', 'assignee', 'notes', 'evidence']];
+  const rows = [['record_type', 'project', 'date', 'test_run', 'route', 'scenario', 'status', 'driver', 'vehicle', 'distance_km', 'reviewer', 'reviewed_at', 'review_notes', 'issue', 'severity', 'assignee', 'notes', 'evidence']];
   (project.testRuns || []).forEach(run => {
-    if (!run.scenarioIds?.length) rows.push(['run', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', '', run.status, run.driver, run.vehicle, run.distance || '', '', '', '', run.notes, attachmentIndex(run.attachments)]);
+    if (!run.scenarioIds?.length) rows.push(['run', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', '', run.status, run.driver, run.vehicle, run.distance || '', run.reviewer, run.reviewedAt, run.reviewNotes, '', '', '', run.notes, attachmentIndex(run.attachments)]);
     run.scenarioIds?.forEach(id => {
       const result = run.scenarioResults?.[id] || {};
-      rows.push(['scenario', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', COMPLIANCE_SCENARIOS[id]?.name || id, result.status || 'not_started', run.driver, run.vehicle, run.distance || '', '', '', '', result.notes || '', [result.evidence, attachmentIndex(result.attachments)].filter(Boolean).join(' | ')]);
+      rows.push(['scenario', project.name, run.date, run.name, routeMap.get(run.routeId)?.name || '', COMPLIANCE_SCENARIOS[id]?.name || id, result.status || 'not_started', run.driver, run.vehicle, run.distance || '', run.reviewer, run.reviewedAt, run.reviewNotes, '', '', '', result.notes || '', [result.evidence, attachmentIndex(result.attachments)].filter(Boolean).join(' | ')]);
     });
   });
   (project.issues || []).forEach(issue => {
     const run = project.testRuns?.find(item => item.id === issue.runId);
-    rows.push(['issue', project.name, issue.createdAt?.slice(0, 10) || '', run?.name || '', routeMap.get(issue.routeId)?.name || '', COMPLIANCE_SCENARIOS[issue.scenarioId]?.name || '', issue.status, '', '', '', issue.title, issue.severity, issue.assignee, [issue.description, issue.rootCause, issue.resolution, issue.verificationNotes].filter(Boolean).join(' | '), [issue.evidence, attachmentIndex(issue.attachments)].filter(Boolean).join(' | ')]);
+    rows.push(['issue', project.name, issue.createdAt?.slice(0, 10) || '', run?.name || '', routeMap.get(issue.routeId)?.name || '', COMPLIANCE_SCENARIOS[issue.scenarioId]?.name || '', issue.status, '', '', '', '', '', '', issue.title, issue.severity, issue.assignee, [issue.description, issue.rootCause, issue.resolution, issue.verificationNotes].filter(Boolean).join(' | '), [issue.evidence, attachmentIndex(issue.attachments)].filter(Boolean).join(' | ')]);
   });
   return `\uFEFF${rows.map(row => row.map(csvCell).join(',')).join('\r\n')}`;
 }

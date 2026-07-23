@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { deleteEvidenceFile, downloadEvidenceFile, saveEvidenceFile } from '../services/evidenceStorage.js';
 import { Button } from './ui.jsx';
 
-export default function EvidenceManager({ projectId, ownerType, ownerId, attachments = [], onChange, compact = false }) {
+export default function EvidenceManager({ projectId, ownerType, ownerId, attachments = [], onChange, compact = false, readOnly = false }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -33,8 +33,8 @@ export default function EvidenceManager({ projectId, ownerType, ownerId, attachm
   };
 
   return <section className={`evidence-manager ${compact ? 'compact' : ''}`}>
-    <header><div><strong>证据附件</strong><span>视频、日志、图片、CAN 数据或现场记录</span></div><Button size="sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? '保存中…' : '＋ 添加附件'}</Button><input ref={inputRef} type="file" multiple hidden onChange={upload} /></header>
-    {!!attachments.length && <div className="evidence-files">{attachments.map(item => <article key={item.id}><i>{fileKind(item)}</i><button onClick={() => download(item)}><strong>{item.name}</strong><span>{formatBytes(item.size)} · {new Date(item.createdAt).toLocaleString('zh-CN')}</span></button><button className="remove" onClick={() => remove(item)}>×</button></article>)}</div>}
+    <header><div><strong>证据附件</strong><span>{readOnly ? '已提交复核，证据内容只读' : '视频、日志、图片、CAN 数据或现场记录'}</span></div>{!readOnly && <><Button size="sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? '保存中…' : '＋ 添加附件'}</Button><input ref={inputRef} type="file" multiple hidden onChange={upload} /></>}</header>
+    {!!attachments.length && <div className="evidence-files">{attachments.map(item => <article key={item.id}><i>{fileKind(item)}</i><button onClick={() => download(item)}><strong>{item.name}</strong><span>{formatBytes(item.size)} · {new Date(item.createdAt).toLocaleString('zh-CN')}</span></button>{!readOnly && <button className="remove" onClick={() => remove(item)}>×</button>}</article>)}</div>}
     {!attachments.length && !compact && <p className="evidence-empty">附件保存在本机 IndexedDB。跨设备迁移时请从数据中心导出“工作区 + 证据目录”。</p>}
     {message && <small className={message.includes('失败') || message.includes('不存在') ? 'error' : ''}>{message}</small>}
   </section>;
