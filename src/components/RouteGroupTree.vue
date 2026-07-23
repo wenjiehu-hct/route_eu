@@ -20,7 +20,6 @@
         <n-button size="tiny" @click="store.toggleAllRoutesVisibility(false)">全部隐藏</n-button>
         <n-button v-if="activeRoute" size="tiny" @click="store.clearActiveRoute">取消聚焦</n-button>
       </n-space>
-      <n-button size="tiny" quaternary @click="restoreDefaults">恢复示例</n-button>
     </div>
 
     <div v-if="activeRoute" class="active-route-banner">
@@ -371,12 +370,6 @@ function handleRouteAction(key) {
   }
 }
 
-function restoreDefaults() {
-  if (window.confirm('恢复示例会替换当前全部路线，建议先导出备份。确定继续吗？')) {
-    store.restoreDefaults();
-    clearSelection();
-  }
-}
 </script>
 
 <style scoped>

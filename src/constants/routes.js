@@ -53,14 +53,6 @@ export const COVERAGE_MAX_WAYS = 5000;
 // 路线渲染仍使用完整遍历几何，stop 只用于导出导航链接。
 export const COVERAGE_MAX_WAYPOINTS_PER_SEGMENT = MAX_GOOGLE_WAYPOINTS + 2;
 
-export const DEFAULT_ROUTES = [
-  { name: '德国环线', stops: ['Munich', 'Dresden', 'Berlin', 'Hamburg', 'Cologne', 'Frankfurt am Main', 'Stuttgart', 'Munich'] },
-  { name: '意大利环线', stops: ['Bolzano', 'Naples', 'Rome', 'Florence', 'Milan', 'Turin'] },
-  { name: '西班牙线', stops: ['València', 'Barcelona', 'Seville', 'Madrid', 'Zaragoza'] },
-  { name: '法国线', stops: ['Marseille', 'Nice', 'Lyon', 'Nantes', 'Paris', 'Calais'] },
-  { name: '英国线', stops: ['London', 'Birmingham', 'Liverpool', 'Manchester', 'Leeds', 'Cambridge'] },
-];
-
 export const CITY_COORDS = {
   munich: [48.137154, 11.576124], 'münchen': [48.137154, 11.576124], dresden: [51.050409, 13.737262],
   berlin: [52.520008, 13.404954], hamburg: [53.551086, 9.993682], cologne: [50.937531, 6.960279], 'köln': [50.937531, 6.960279],

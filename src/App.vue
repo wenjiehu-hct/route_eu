@@ -44,8 +44,8 @@
           <n-space justify="space-between" align="center">
             <span class="status-text">{{ status }}</span>
             <n-space size="small">
-              <n-button size="tiny" @click="store.exportData">导出</n-button>
-              <n-button size="tiny" @click="triggerImport">导入</n-button>
+              <n-button size="tiny" @click="exportBackup">导出备份</n-button>
+              <n-button size="tiny" @click="triggerImport">导入备份</n-button>
             </n-space>
           </n-space>
           <input ref="importFileRef" type="file" accept=".json" style="display:none" @change="handleImportFile" />
@@ -65,8 +65,10 @@ import RouteGroupTree from './components/RouteGroupTree.vue';
 import POIEditor from './components/POIEditor.vue';
 import CoveragePlanner from './components/CoveragePlanner.vue';
 import { useRoutePlannerStore } from './stores/routePlanner.js';
+import { usePOIStore } from './stores/poi.js';
 
 const store = useRoutePlannerStore();
+const poiStore = usePOIStore();
 const { status } = storeToRefs(store);
 const importFileRef = ref(null);
 
@@ -170,14 +172,23 @@ function toggleCollapse() {
 }
 
 function triggerImport() {
-  if (store.allRoutes.length && !window.confirm('导入会替换当前全部路线，建议先导出备份。确定继续吗？')) return;
+  if ((store.allRoutes.length || poiStore.pois.length)
+    && !window.confirm('导入备份会替换当前全部路线和收藏点，建议先导出当前数据。确定继续吗？')) return;
   importFileRef.value?.click();
+}
+
+function exportBackup() {
+  store.exportData({
+    pois: JSON.parse(JSON.stringify(poiStore.pois)),
+  });
 }
 
 function handleImportFile(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  store.importData(file);
+  store.importData(file, (backup) => {
+    if (Array.isArray(backup.pois)) poiStore.replacePOIs(backup.pois);
+  });
   event.target.value = '';
 }
 

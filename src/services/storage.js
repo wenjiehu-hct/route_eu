@@ -1,34 +1,15 @@
-import { DEFAULT_GROUP_NAME, DEFAULT_ROUTES, LEGACY_STORAGE_KEYS, ROUTE_COLORS, STORAGE_KEY } from '../constants/routes.js';
-import { createId, normalizeName, parseLatLon } from './utils.js';
-import { CITY_COORDS } from '../constants/routes.js';
+import { DEFAULT_GROUP_NAME, LEGACY_STORAGE_KEYS, ROUTE_COLORS, STORAGE_KEY } from '../constants/routes.js';
+import { createId } from './utils.js';
 
-function localGeocode(name) {
-  const direct = parseLatLon(name);
-  if (direct) return direct;
-  const key = normalizeName(name);
-  const coords = CITY_COORDS[key];
-  if (coords) return { name, lat: coords[0], lon: coords[1] };
-  return null;
-}
+const LEGACY_SAMPLE_ROUTE_NAMES = new Set([
+  '德国环线',
+  '意大利环线',
+  '西班牙线',
+  '法国线',
+  '英国线',
+]);
 
-export function seedRoutes() {
-  return DEFAULT_ROUTES.map((route, index) => ({
-    id: createId('route'),
-    name: route.name,
-    color: ROUTE_COLORS[index % ROUTE_COLORS.length],
-    visible: true,
-    expanded: true,
-    stats: null,
-    warning: '',
-    googleUrl: '',
-    stops: route.stops.map(stopName => {
-      const point = localGeocode(stopName) || { name: stopName, lat: 0, lon: 0 };
-      return { name: stopName, lat: point.lat, lon: point.lon };
-    }),
-  }));
-}
-
-export function createDefaultGroup(routes) {
+export function createDefaultGroup(routes = []) {
   return [{
     id: createId('group'),
     name: DEFAULT_GROUP_NAME,
@@ -38,7 +19,9 @@ export function createDefaultGroup(routes) {
 }
 
 function migrateLegacyRoutes(rawRoutes) {
-  const routes = rawRoutes.map((route, index) => ({
+  const routes = rawRoutes
+    .filter(route => !LEGACY_SAMPLE_ROUTE_NAMES.has(route?.name))
+    .map((route, index) => ({
     id: route.id || createId(`route${index}`),
     name: route.name || `路线 ${index + 1}`,
     color: route.color || ROUTE_COLORS[index % ROUTE_COLORS.length],
@@ -61,7 +44,14 @@ export function loadGroups() {
   if (current) {
     try {
       const parsed = JSON.parse(current);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        const cleaned = removeLegacySampleRoutes(parsed);
+        if (cleaned.changed) saveGroups(cleaned.groups);
+        if (cleaned.groups.length) return cleaned.groups;
+        const empty = createDefaultGroup();
+        saveGroups(empty);
+        return empty;
+      }
     } catch (error) {
       // ignore parse error and continue fallback
     }
@@ -82,11 +72,24 @@ export function loadGroups() {
     }
   }
 
-  const seeded = createDefaultGroup(seedRoutes());
-  saveGroups(seeded);
-  return seeded;
+  const empty = createDefaultGroup();
+  saveGroups(empty);
+  return empty;
 }
 
 export function saveGroups(groups) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+}
+
+function removeLegacySampleRoutes(groups) {
+  let changed = false;
+  const cleaned = groups.map(group => {
+    const routes = (group.routes || []).filter(route => {
+      const isSample = LEGACY_SAMPLE_ROUTE_NAMES.has(route.name);
+      if (isSample) changed = true;
+      return !isSample;
+    });
+    return { ...group, routes };
+  });
+  return { groups: cleaned, changed };
 }

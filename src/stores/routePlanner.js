@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { ROUTE_COLORS } from '../constants/routes.js';
 import { buildGoogleMapsUrl, fetchRoutePlan, localSuggest } from '../services/routing.js';
-import { loadGroups, saveGroups, seedRoutes, createDefaultGroup } from '../services/storage.js';
+import { loadGroups, saveGroups } from '../services/storage.js';
 import { createId, formatKm } from '../services/utils.js';
 
 function nextRouteColor(routeCount) {
@@ -410,11 +410,12 @@ ${trackPoints}
    * 导出全部路线数据为 JSON 文件（包含 OSRM 几何路径等完整数据）。
    * 导出后无需再次请求 OSRM API，导入即可直接渲染。
    */
-  function exportData() {
+  function exportData({ pois = [] } = {}) {
     const payload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       groups: JSON.parse(JSON.stringify(groups.value)),
+      pois: JSON.parse(JSON.stringify(pois)),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -424,24 +425,25 @@ ${trackPoints}
     anchor.download = `route-planner-${timestamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setStatus(`已导出 ${allRoutes.value.length} 条路线数据到文件。`);
+    setStatus(`已备份 ${allRoutes.value.length} 条路线和 ${pois.length} 个收藏点。`);
   }
 
   /**
    * 从 JSON 文件导入路线数据，替换当前所有分组和路线。
    * 支持 version=1 格式（含 stats 几何数据）以及旧版纯路线数组格式（自动迁移）。
    */
-  function importData(file) {
+  function importData(file, onImported) {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const raw = JSON.parse(event.target.result);
 
         // 格式一：新版导出格式 { version, exportedAt, groups }
-        if (raw.version === 1 && Array.isArray(raw.groups)) {
+        if ((raw.version === 1 || raw.version === 2) && Array.isArray(raw.groups)) {
           groups.value = raw.groups;
           activeRouteId.value = null;
           persist();
+          onImported?.(raw);
           setStatus(`已导入 ${raw.groups.length} 个分组、${allRoutes.value.length} 条路线。`);
           return;
         }
@@ -527,16 +529,6 @@ ${trackPoints}
     moveRoutesToGroup([routeId], targetGroupId);
   }
 
-  /** 清空当前数据，恢复为默认示例路线 */
-  function restoreDefaults() {
-    groups.value = createDefaultGroup(seedRoutes());
-    activeRouteId.value = null;
-    resetDraft();
-    persist();
-    setStatus('已恢复默认示例路线。');
-    hydrateMissingStats();
-  }
-
   /** 删除单条路线 */
   function deleteRoute(routeId) {
     deleteRoutes([routeId]);
@@ -590,7 +582,6 @@ ${trackPoints}
     updateDraftStopCoords,
     updateRouteStopCoords,
     moveRouteToGroup,
-    restoreDefaults,
   };
 });
 

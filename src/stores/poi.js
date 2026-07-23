@@ -51,6 +51,11 @@ export const usePOIStore = defineStore('poi', () => {
     }
   }
 
+  function replacePOIs(nextPOIs) {
+    pois.value = Array.isArray(nextPOIs) ? nextPOIs : [];
+    persist();
+  }
+
   return {
     pois,
     visiblePOIs,
@@ -58,5 +63,6 @@ export const usePOIStore = defineStore('poi', () => {
     updatePOI,
     removePOI,
     togglePOI,
+    replacePOIs,
   };
 });
