@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { COMPLIANCE_SCENARIOS, TEST_STATUSES, getComplianceProfile } from '../constants/compliance.js';
 import { analyzeRouteForProfile, bestRouteForScenario } from '../services/compliance.js';
 import { formatKm } from '../services/utils.js';
@@ -12,9 +13,11 @@ const PROJECT_STATUSES = [{ value: 'planning', label: '规划中' }, { value: 'r
 
 export default function ComplianceWorkbench() {
   const store = useComplianceStore();
+  const [params, setParams] = useSearchParams();
   const groups = useRoutePlannerStore(state => state.groups);
   const allRoutes = useMemo(() => groups.flatMap(group => group.routes), [groups]);
-  const [section, setSection] = useState('overview');
+  const requestedSection = params.get('section');
+  const [section, setSection] = useState(SECTIONS.some(item => item.value === requestedSection) ? requestedSection : 'overview');
   const [newProfile, setNewProfile] = useState(store.profiles[0].id);
   const project = store.projects.find(item => item.id === store.activeProjectId) || null;
   const profile = getComplianceProfile(project?.profileId);
@@ -39,16 +42,17 @@ export default function ComplianceWorkbench() {
 
   const update = (field, value) => store.updateProject({ [field]: value });
   const openPlanner = () => { useCoveragePlannerStore.getState().configureForCompliance(project.profileId, project.id); window.dispatchEvent(new CustomEvent('open-workspace', { detail: 'coverage' })); };
+  const switchSection = value => { setSection(value); setParams(value === 'overview' ? {} : { section: value }, { replace: true }); };
 
   return <Card title="海外法规测试工作台" subtitle="法规路线规划 · 执行记录 · 工程报告" actions={<Chip tone="amber">工程摸底</Chip>}>
     <div className="project-switcher"><select value={project.id} onChange={event => store.selectProject(event.target.value)}>{store.projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><Button size="sm" onClick={() => store.createProject(project.profileId)}>新建</Button><Button size="sm" variant="ghost" onClick={() => store.duplicateProject(project.id)}>复制</Button></div>
-    <nav className="subnav">{SECTIONS.map(item => <button key={item.value} className={section === item.value ? 'active' : ''} onClick={() => setSection(item.value)}>{item.label}{item.value === 'routes' && <span>{assignedRoutes.length}</span>}{item.value === 'scenarios' && <span>{completed}/{scenarios.length}</span>}</button>)}</nav>
+    <nav className="subnav">{SECTIONS.map(item => <button key={item.value} className={section === item.value ? 'active' : ''} onClick={() => switchSection(item.value)}>{item.label}{item.value === 'routes' && <span>{assignedRoutes.length}</span>}{item.value === 'scenarios' && <span>{completed}/{scenarios.length}</span>}</button>)}</nav>
 
     {section === 'overview' && <div className="stack-lg">
       <div className="readiness-card"><div><strong>{routeReadiness}</strong><span>/100</span><small>路线准备度</small></div><section><strong>{profile.name}</strong><span>{profile.type} · {project.market}</span><ProgressBar value={scenarios.length ? completed / scenarios.length * 100 : 0} tone="green" /><small>执行完成 {completed}/{scenarios.length} · 已分配 {assignedRoutes.length} 条路线</small></section></div>
       <div className="notice notice-amber">本模块用于工程摸底与内部预验证，不构成法规认证结论。OSM 数据必须用现场标志和适用法规原文复核；危险动作只能在受控条件下执行。</div>
       <div className="form-grid"><label className="field span-2"><span>项目名称</span><input value={project.name} onChange={event => update('name', event.target.value)} /></label><label className="field"><span>模板</span><select value={project.profileId} onChange={event => store.setProfile(event.target.value)}>{store.profiles.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field"><span>项目状态</span><select value={project.status} onChange={event => update('status', event.target.value)}>{PROJECT_STATUSES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label className="field"><span>目标市场</span><input value={project.market} onChange={event => update('market', event.target.value)} /></label><label className="field"><span>车型/版本</span><input value={project.vehicle} onChange={event => update('vehicle', event.target.value)} placeholder="车型、软件、地图版本" /></label><label className="field"><span>负责人</span><input value={project.owner} onChange={event => update('owner', event.target.value)} /></label><label className="field span-2"><span>项目备注</span><textarea rows="3" value={project.notes} onChange={event => update('notes', event.target.value)} /></label></div>
-      <div className="toolbar-row"><Button onClick={() => { useCoveragePlannerStore.getState().setComplianceContext(project.id); window.dispatchEvent(new CustomEvent('open-workspace', { detail: 'manual' })); }}>添加 Waypoint 路线</Button><Button variant="primary" onClick={openPlanner}>选区覆盖生成路线</Button><Button disabled={!assignedRoutes.length} onClick={() => setSection('scenarios')}>进入场景矩阵</Button><Button onClick={() => store.exportProject(project.id, allRoutes)}>导出 Markdown 报告</Button><Button variant="danger" onClick={() => { if (window.confirm(`删除测试项目“${project.name}”？路线不会被删除。`)) store.deleteProject(project.id); }}>删除项目</Button></div>
+      <div className="toolbar-row"><Button onClick={() => { useCoveragePlannerStore.getState().setComplianceContext(project.id); window.dispatchEvent(new CustomEvent('open-workspace', { detail: 'manual' })); }}>添加 Waypoint 路线</Button><Button variant="primary" onClick={openPlanner}>选区覆盖生成路线</Button><Button disabled={!assignedRoutes.length} onClick={() => switchSection('scenarios')}>进入场景矩阵</Button><Button onClick={() => store.exportProject(project.id, allRoutes)}>导出 Markdown 报告</Button><Button variant="danger" onClick={() => { if (window.confirm(`删除测试项目“${project.name}”？路线不会被删除。`)) store.deleteProject(project.id); }}>删除项目</Button></div>
     </div>}
 
     {section === 'routes' && <RoutePool store={store} project={project} profile={profile} allRoutes={allRoutes} assignedRoutes={assignedRoutes} />}

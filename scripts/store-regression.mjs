@@ -14,6 +14,7 @@ const { useComplianceStore, normalizeProject } = await import('../src/stores/use
 const { useCoveragePlannerStore, getCoverageDerived } = await import('../src/stores/useCoveragePlannerStore.js');
 const { COMPLIANCE_PROFILES, COMPLIANCE_SCENARIOS } = await import('../src/constants/compliance.js');
 const { analyzeRouteForProfile, buildProjectCsv } = await import('../src/services/compliance.js');
+const { getProjectMetrics } = await import('../src/services/portfolio.js');
 const { traversalToSegments } = await import('../src/services/coveragePlanner.js');
 
 const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -26,6 +27,8 @@ routeStore.addRoutesToGroup(groupId, [{ id: 'route-test', name: 'React route', c
 assert(useRoutePlannerStore.getState().groups[0].routes[0].name === 'React route', 'Route insertion failed');
 
 const project = useComplianceStore.getState().createProject('eu_gsr_isa');
+const emptyReadiness = getProjectMetrics(project, useRoutePlannerStore.getState().groups.flatMap(group => group.routes));
+assert(emptyReadiness.readiness < 30 && emptyReadiness.readinessMissing.some(item => item.id === 'assignedRoutes'), 'Project readiness did not expose missing launch conditions');
 useComplianceStore.getState().assignRoutesToProject(project.id, ['route-test']);
 assert(useComplianceStore.getState().projects[0].routeIds.includes('route-test'), 'Compliance route assignment failed');
 const normalizedLegacy = normalizeProject({ id: 'legacy', name: 'Legacy project', profileId: 'eu_gsr_isa', routeIds: [] });
@@ -44,6 +47,8 @@ const issue = useComplianceStore.getState().createIssueFromRun(project.id, testR
 useComplianceStore.getState().updateIssue(project.id, issue.id, { status: 'investigating' });
 useComplianceStore.getState().completeTestRun(project.id, testRun.id, { startOdometer: 1000, endOdometer: 1052.4 });
 const expandedProject = useComplianceStore.getState().projects.find(item => item.id === project.id);
+const progressedMetrics = getProjectMetrics(expandedProject, useRoutePlannerStore.getState().groups.flatMap(group => group.routes));
+assert(progressedMetrics.readiness > emptyReadiness.readiness && progressedMetrics.deliveryProgress > 0, 'Project readiness and delivery progress were not separated correctly');
 assert(expandedProject.testRuns[0].status === 'completed' && expandedProject.testRuns[0].distance === 52.4, 'Test run lifecycle failed');
 assert(expandedProject.testRuns[0].checkpoints.length === 1, 'Run checkpoint lifecycle failed');
 assert(expandedProject.results.isa_total_distance.status === 'passed' && expandedProject.results.isa_total_distance.sourceRunId === testRun.id, 'Completed run did not synchronize scenario results');

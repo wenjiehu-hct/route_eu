@@ -295,8 +295,8 @@ textarea { resize: vertical; }
 
 /* Project detail */
 .project-command-strip { display: grid; grid-template-columns: 100px repeat(4,1fr); gap: 0; align-items: center; min-height: 104px; border: 1px solid #d8e2ed; border-radius: 12px; padding: 12px 18px; color: #dce9f6; background: linear-gradient(118deg, #0b223b, #154a79 72%, #1a5e96); box-shadow: var(--shadow-md); }
-.readiness-gauge { display: grid; place-items: center; width: 74px; height: 74px; border-radius: 50%; background: conic-gradient(#5ad69d var(--progress), rgba(255,255,255,.14) 0); }
-.readiness-gauge::before { position: absolute; width: 61px; height: 61px; border-radius: 50%; background: #123c63; content: ""; }
+.readiness-gauge { position: relative; display: grid; place-items: center; width: 74px; height: 74px; flex: 0 0 74px; overflow: hidden; border-radius: 50%; background: conic-gradient(#5ad69d var(--progress), rgba(255,255,255,.14) 0); isolation: isolate; }
+.readiness-gauge::before { position: absolute; z-index: 0; inset: 6px; border-radius: 50%; background: #123c63; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); content: ""; }
 .readiness-gauge span { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
 .readiness-gauge strong { color: #fff; font-size: 20px; }
 .readiness-gauge small { color: #8eb0cf; font-size: 7px; }
@@ -305,6 +305,26 @@ textarea { resize: vertical; }
 .project-command-strip > div > strong { margin: 5px 0; overflow: hidden; color: #fff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .project-command-strip > div > small { color: #82a1be; font-size: 8px; }
 .project-command-strip .progress-track { width: 90%; height: 4px; background: rgba(255,255,255,.12); }
+.project-readiness-card .card-body { display: flex; flex-direction: column; gap: 12px; }
+.readiness-detail-summary { display: flex; align-items: flex-end; justify-content: space-between; border-radius: 10px; padding: 11px 13px; color: #fff; background: linear-gradient(120deg,#123b63,#1f6eae); }
+.readiness-detail-summary > strong { font-size: 28px; line-height: 1; }
+.readiness-detail-summary > strong small { margin-left: 2px; color: #9fc4e5; font-size: 9px; }
+.readiness-detail-summary > span { max-width: 58%; color: #c3dbef; font-size: 8px; line-height: 1.45; text-align: right; }
+.readiness-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
+.readiness-dimensions > div { display: flex; flex-direction: column; gap: 5px; }
+.readiness-dimensions > div > span { display: flex; justify-content: space-between; color: #647589; font-size: 8px; }
+.readiness-dimensions em { color: #326da9; font-style: normal; font-weight: 800; }
+.readiness-dimensions .progress-track { height: 5px; }
+.readiness-missing { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.readiness-missing > strong { margin-bottom: 2px; color: #4a5c70; font-size: 9px; }
+.readiness-missing > button { display: grid; grid-template-columns: 21px minmax(0,1fr) auto; gap: 8px; align-items: center; border: 1px solid #e1e7ee; border-radius: 8px; padding: 7px; text-align: left; background: #fff; cursor: pointer; }
+.readiness-missing > button:hover { border-color: #a9c7e7; background: #f7fbff; }
+.readiness-missing i { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 6px; color: #3976b5; background: #eaf3fc; font-size: 9px; font-style: normal; font-weight: 900; }
+.readiness-missing i.critical { color: #9a6416; background: #fff2d8; }
+.readiness-missing button > span { display: flex; min-width: 0; flex-direction: column; }
+.readiness-missing button strong { overflow: hidden; color: #506176; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.readiness-missing button small, .readiness-missing > small { color: #8a98a8; font-size: 7px; }
+.readiness-missing button > em { color: #2e6dab; font-size: 7px; font-style: normal; white-space: nowrap; }
 .project-tabs, .workspace-tabs { display: flex; gap: 2px; border-bottom: 1px solid #d8e0e9; }
 .project-tabs button, .workspace-tabs button { position: relative; min-width: 112px; border: 0; padding: 11px 14px; color: #718096; background: transparent; font-size: 10px; }
 .project-tabs button::after, .workspace-tabs button::after { position: absolute; right: 12px; bottom: -1px; left: 12px; height: 2px; border-radius: 2px; background: transparent; content: ""; }

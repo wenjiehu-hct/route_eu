@@ -49,7 +49,7 @@ export default function ProjectDetailPage() {
 
     <section className="project-command-strip">
       <div className="readiness-gauge" style={{ '--progress': `${metrics.readiness * 3.6}deg` }}><span><strong>{metrics.readiness}</strong><small>项目准备度</small></span></div>
-      <div><span>场景完成</span><strong>{metrics.completedScenarios}/{metrics.scenarioCount}</strong><ProgressBar value={metrics.scenarioCount ? metrics.completedScenarios / metrics.scenarioCount * 100 : 0} /></div>
+      <div><span>交付进度</span><strong>{metrics.deliveryProgress}%</strong><ProgressBar value={metrics.deliveryProgress} tone="green" /><small>场景 {metrics.completedScenarios}/{metrics.scenarioCount} · 任务 {metrics.completedRuns}/{project.testRuns.length}</small></div>
       <div><span>路线资产</span><strong>{metrics.assignedRoutes.length} 条 · {formatKm(metrics.assignedDistance)}</strong><small>已关联到当前项目</small></div>
       <div><span>测试执行</span><strong>{metrics.completedRuns}/{project.testRuns.length}</strong><small>已完成 / 全部任务</small></div>
       <div><span>待闭环问题</span><strong className={metrics.criticalIssues ? 'text-danger' : ''}>{metrics.openIssues.length}</strong><small>{metrics.criticalIssues} 个高风险</small></div>
@@ -69,6 +69,12 @@ function ProjectOverview({ project, metrics, store, navigate, openWaypointPlanne
   const update = (field, value) => store.updateProjectById(project.id, { [field]: value });
   const assignedRoutes = metrics.assignedRoutes;
   const nextMilestones = project.milestones.filter(item => item.status !== 'completed').slice(0, 4);
+  const addressReadiness = item => {
+    if (item.action === 'definition') document.querySelector('.project-definition-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (item.action === 'baseline') navigate(`/projects/${project.id}/compliance?section=references`);
+    if (item.action === 'routes') assignedRoutes.length ? navigate(`/projects/${project.id}/compliance?section=routes`) : openWaypointPlanner();
+    if (item.action === 'runs') navigate(`/projects/${project.id}/runs`);
+  };
   return <div className="project-overview-grid">
     <div className="project-main-column">
       <Card title="项目定义" subtitle="冻结项目边界、目标市场与交付责任">
@@ -95,6 +101,12 @@ function ProjectOverview({ project, metrics, store, navigate, openWaypointPlanne
     </div>
 
     <aside className="project-side-column">
+      <Card className="project-readiness-card" title="项目准备度" subtitle={metrics.readinessLabel}>
+        <div className="readiness-detail-summary"><strong>{metrics.readiness}<small>/100</small></strong><span>{metrics.readinessMissing.length ? `还有 ${metrics.readinessMissing.length} 项待完善` : '所有开测条件已满足'}</span></div>
+        <div className="readiness-dimensions">{metrics.readinessDimensions.map(item => <div key={item.id}><span><strong>{item.label}</strong><em>{item.score}%</em></span><ProgressBar value={item.score} tone={item.score === 100 ? 'green' : 'blue'} /></div>)}</div>
+        {!!metrics.readinessMissing.length && <div className="readiness-missing"><strong>优先补齐</strong>{metrics.readinessMissing.slice(0, 4).map(item => <button key={`${item.dimensionId}-${item.id}`} onClick={() => addressReadiness(item)}><i className={item.critical ? 'critical' : ''}>{item.critical ? '!' : '·'}</i><span><strong>{item.label}</strong><small>{item.dimensionLabel} · +{item.weight} 分</small></span><em>去完善 →</em></button>)}{metrics.readinessMissing.length > 4 && <small>另有 {metrics.readinessMissing.length - 4} 项，可在对应模块继续完善。</small>}</div>}
+      </Card>
+
       <Card title="交付概况">
         <div className="delivery-kpis">
           <span><small>场景完成率</small><strong>{metrics.scenarioCount ? Math.round(metrics.completedScenarios / metrics.scenarioCount * 100) : 0}%</strong></span>

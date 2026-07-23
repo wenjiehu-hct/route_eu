@@ -29,7 +29,7 @@ async function waitForServer() {
 app.whenReady().then(async () => {
   try {
     if (!useDist) await waitForServer();
-    const window = new BrowserWindow({ show: false, width: 1440, height: 960, webPreferences: { contextIsolation: true, sandbox: true } });
+    const window = new BrowserWindow({ show: false, width: Number(process.env.SMOKE_WIDTH) || 1440, height: 960, webPreferences: { contextIsolation: true, sandbox: true } });
     window.webContents.on('console-message', event => {
       if (event.level === 'error') errors.push(event.message);
     });
@@ -68,6 +68,11 @@ app.whenReady().then(async () => {
       const createPanelOpened = await waitFor('.create-project-panel');
       document.querySelector('.create-project-panel .toolbar-row .button-primary')?.click();
       const projectCreated = await waitFor('.project-command-strip');
+      const projectReadinessVisible = Boolean(document.querySelector('.project-readiness-card .readiness-dimensions') && document.querySelector('.project-command-strip')?.textContent?.includes('交付进度'));
+      const readinessGauge = document.querySelector('.readiness-gauge');
+      const readinessStrip = document.querySelector('.project-command-strip');
+      const readinessCard = document.querySelector('.project-readiness-card');
+      const readinessLayoutStable = Boolean(readinessGauge && getComputedStyle(readinessGauge).position === 'relative' && readinessStrip.scrollWidth <= readinessStrip.clientWidth + 1 && readinessCard.scrollWidth <= readinessCard.clientWidth + 1);
       document.querySelectorAll('.project-tabs button')[2]?.click();
       await waitFor('.execution-panel');
       document.querySelector('.execution-panel .card-actions .button-primary')?.click();
@@ -122,10 +127,12 @@ app.whenReady().then(async () => {
       document.querySelector('.platform-nav a[href="#/planning"]')?.click();
       const planningOpened = await waitFor('.planning-page');
       const waypointModeDefault = document.querySelector('.planning-methods button.active strong')?.textContent?.includes('Waypoint');
-      return { createPanelOpened, projectCreated, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
+      return { createPanelOpened, projectCreated, projectReadinessVisible, readinessLayoutStable, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
+    if (!interaction.projectReadinessVisible) errors.push('Project readiness breakdown or delivery progress is missing');
+    if (!interaction.readinessLayoutStable) errors.push('Project readiness layout overflows or gauge positioning is unstable');
     if (!interaction.runCreated) errors.push('Test run creation failed');
     if (!interaction.sessionOpened) errors.push('Live test session failed to open');
     if (!interaction.startGuidanceVisible) errors.push('Test run preparation guidance is missing or start control is disabled');
