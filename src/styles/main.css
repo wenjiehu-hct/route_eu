@@ -1,0 +1,290 @@
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #eef3f9;
+}
+
+/* 全屏布局：地图 + 浮动面板 */
+.app-shell {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+/* 浮动面板 */
+.floating-panel {
+  position: absolute;
+  z-index: 1000;
+  background: rgba(248, 251, 255, 0.97);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 拖拽手柄栏 */
+.panel-drag-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #123c7a 0%, #265cb5 100%);
+  color: #fff;
+  border-radius: 12px 12px 0 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.panel-drag-bar:active {
+  cursor: grabbing;
+}
+
+.drag-bar-grip {
+  font-size: 14px;
+  opacity: 0.6;
+  letter-spacing: -1px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  flex: 1;
+}
+
+/* 面板内容 */
+.panel-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.panel-scroll {
+  max-height: calc(100vh - 32px - 44px - 42px);
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* 面板底部固定区 */
+.panel-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 0 0 12px 12px;
+}
+
+.status-text {
+  font-size: 11px;
+  color: #64748b;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 宽度拖拽分隔线 */
+.width-resizer {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1001;
+}
+
+.width-resizer::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.width-resizer:hover::after {
+  background: #94a3b8;
+}
+
+/* 高度拖拽分隔线 */
+.height-resizer {
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  z-index: 1001;
+}
+
+.height-resizer::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.height-resizer:hover::after {
+  background: #94a3b8;
+}
+
+/* 地图 */
+.map-canvas {
+  width: 100%;
+  height: 100vh;
+}
+
+/* 搜索建议列表 */
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.suggestion-button small {
+  color: #64748b;
+}
+
+.helper-text {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.stop-row,
+.route-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.route-item-name {
+  font-weight: 700;
+}
+
+.route-item-meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+/* 草稿分组选择器 */
+.draft-group-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-group-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+}
+
+/* 草稿预览卡片 */
+.draft-preview-card .n-card__content {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.draft-preview-line {
+  margin-top: 4px;
+}
+
+.draft-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.metric-chip {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.metric-chip strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.draft-preview-error {
+  color: #b91c1c;
+}
+
+/* 地图上站点名称标签 */
+.stop-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.stop-label::before {
+  display: none;
+}
+
+/* Google 导航链接 */
+.nav-link {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e88e5;
+  text-decoration: none;
+  margin-top: 4px;
+}
+
+.nav-link:hover {
+  color: #1565c0;
+  text-decoration: underline;
+}
+
+/* 可拖拽点位图标 */
+.drag-dot {
+  background: none !important;
+  border: none !important;
+}
+
+/* 路线操作按钮区域 */
+.route-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
