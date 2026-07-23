@@ -10,7 +10,7 @@ globalThis.CustomEvent = class CustomEvent {
 };
 
 const { useRoutePlannerStore } = await import('../src/stores/useRoutePlannerStore.js');
-const { useComplianceStore } = await import('../src/stores/useComplianceStore.js');
+const { useComplianceStore, normalizeProject } = await import('../src/stores/useComplianceStore.js');
 const { useCoveragePlannerStore, getCoverageDerived } = await import('../src/stores/useCoveragePlannerStore.js');
 const { COMPLIANCE_PROFILES, COMPLIANCE_SCENARIOS } = await import('../src/constants/compliance.js');
 const { analyzeRouteForProfile } = await import('../src/services/compliance.js');
@@ -28,6 +28,17 @@ assert(useRoutePlannerStore.getState().groups[0].routes[0].name === 'React route
 const project = useComplianceStore.getState().createProject('eu_gsr_isa');
 useComplianceStore.getState().assignRoutesToProject(project.id, ['route-test']);
 assert(useComplianceStore.getState().projects[0].routeIds.includes('route-test'), 'Compliance route assignment failed');
+const normalizedLegacy = normalizeProject({ id: 'legacy', name: 'Legacy project', profileId: 'eu_gsr_isa', routeIds: [] });
+assert(normalizedLegacy.phase === 'concept' && normalizedLegacy.priority === 'medium', 'Legacy project defaults were not migrated');
+assert(Array.isArray(normalizedLegacy.testRuns) && Array.isArray(normalizedLegacy.issues) && Array.isArray(normalizedLegacy.activities), 'Legacy project collections were not migrated');
+const testRun = useComplianceStore.getState().addTestRun(project.id, { name: 'Munich execution', routeId: 'route-test' });
+useComplianceStore.getState().updateTestRun(project.id, testRun.id, { status: 'completed', distance: 52.4 });
+const issue = useComplianceStore.getState().addIssue(project.id, { title: 'ISA sign mismatch', severity: 'high', routeId: 'route-test' });
+useComplianceStore.getState().updateIssue(project.id, issue.id, { status: 'investigating' });
+const expandedProject = useComplianceStore.getState().projects.find(item => item.id === project.id);
+assert(expandedProject.testRuns[0].status === 'completed' && expandedProject.testRuns[0].distance === 52.4, 'Test run lifecycle failed');
+assert(expandedProject.issues[0].status === 'investigating', 'Issue lifecycle failed');
+assert(expandedProject.activities.length >= 4, 'Project activity logging failed');
 useCoveragePlannerStore.getState().configureForCompliance('eu_gsr_isa', project.id);
 const planner = useCoveragePlannerStore.getState();
 assert(planner.routeCount === 5 && planner.includeLinks && planner.complianceProjectId === project.id, 'Compliance planner configuration failed');
@@ -53,4 +64,3 @@ const analysis = analyzeRouteForProfile({ stats: { distance: 60_000, motorwayDis
 assert(analysis.score > 0, 'Compliance route analysis failed');
 
 process.stdout.write(`Store regression passed: ${COMPLIANCE_PROFILES.length} profiles, ${Object.keys(COMPLIANCE_SCENARIOS).length} scenarios\n`);
-

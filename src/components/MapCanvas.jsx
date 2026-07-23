@@ -21,6 +21,7 @@ export default function MapCanvas() {
   const layersRef = useRef({});
   const baseLayerRef = useRef(null);
   const locationRef = useRef({ watchId: null, marker: null, circle: null });
+  const fittedRouteRef = useRef(null);
   const groups = useRoutePlannerStore(state => state.groups);
   const draft = useRoutePlannerStore(state => state.draft);
   const draftPreview = useRoutePlannerStore(state => state.draftPreview);
@@ -67,6 +68,22 @@ export default function MapCanvas() {
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const timer = setTimeout(() => map.invalidateSize(), 80);
+    if (activeRouteId && fittedRouteRef.current !== activeRouteId) {
+      const route = groups.flatMap(group => group.routes).find(item => item.id === activeRouteId);
+      const points = route?.stats?.geometry?.length ? route.stats.geometry.map(([lon, lat]) => ({ lat, lon })) : route?.stops;
+      if (points?.length) {
+        fitBounds(map, points.reduce((bounds, point) => ({ south: Math.min(bounds.south, point.lat), west: Math.min(bounds.west, point.lon), north: Math.max(bounds.north, point.lat), east: Math.max(bounds.east, point.lon) }), { south: points[0].lat, west: points[0].lon, north: points[0].lat, east: points[0].lon }));
+        fittedRouteRef.current = activeRouteId;
+      }
+    }
+    if (!activeRouteId) fittedRouteRef.current = null;
+    return () => clearTimeout(timer);
+  }, [activeRouteId, groups]);
 
   useEffect(() => {
     const map = mapRef.current;

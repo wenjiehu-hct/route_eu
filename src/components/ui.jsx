@@ -25,3 +25,22 @@ export function Field({ label, className = '', children }) {
   return <label className={`field ${className}`}><span>{label}</span>{children}</label>;
 }
 
+export function PageHeader({ eyebrow, title, description, actions, children }) {
+  return <header className="page-header">
+    <div className="page-heading">{eyebrow && <span>{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}{children}</div>
+    {actions && <div className="page-actions">{actions}</div>}
+  </header>;
+}
+
+export function StatCard({ label, value, detail, tone = 'blue', icon = '·', trend }) {
+  return <article className={`stat-card stat-${tone}`}>
+    <div className="stat-icon">{icon}</div>
+    <div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
+    {trend && <em>{trend}</em>}
+  </article>;
+}
+
+export function StatusBadge({ value, labels = {}, tone }) {
+  const autoTone = tone || ({ completed: 'green', passed: 'green', verified: 'green', closed: 'green', running: 'blue', investigating: 'blue', planning: 'neutral', planned: 'neutral', paused: 'amber', blocked: 'amber', failed: 'red', critical: 'red', high: 'amber' })[value] || 'neutral';
+  return <Chip tone={autoTone}>{labels[value] || value || '未设置'}</Chip>;
+}

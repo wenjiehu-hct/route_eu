@@ -73,6 +73,8 @@ export function buildProjectReport(project, routes) {
     `- 车型/项目：${project.vehicle || '未填写'}`,
     `- 负责人：${project.owner || '未填写'}`,
     `- 状态：${projectStatusLabel(project.status)}`,
+    `- 阶段：${({ concept: '概念验证', development: '开发验证', validation: '系统验证', homologation: '认证准备' })[project.phase] || '未设置'}`,
+    `- 计划周期：${project.startDate || '未设置'} ～ ${project.endDate || '未设置'}`,
     `- 导出时间：${new Date().toLocaleString('zh-CN')}`,
     '',
     '> 本报告用于工程摸底、路线准备和内部预验证，不构成法规合规或型式认证结论。',
@@ -96,6 +98,26 @@ export function buildProjectReport(project, routes) {
     const status = TEST_STATUSES.find(item => item.value === result.status)?.label || '未开始';
     lines.push(`| ${escapeCell(scenario.category)} | ${escapeCell(scenario.name)} | ${escapeCell(scenario.targetLabel || '')} | ${escapeCell(best?.analysis.label || '需人工验证')} | ${status} | ${escapeCell(selectedRoute?.name || best?.route?.name || '')} | ${escapeCell(result.notes || '')} |`);
   });
+
+  lines.push('', '## 测试执行', '', '| 日期 | 测试任务 | 路线 | 驾驶员 | 车辆 | 状态 | 里程 |', '|---|---|---|---|---|---|---|');
+  if (!(project.testRuns || []).length) lines.push('| - | 暂无测试执行 | - | - | - | - | - |');
+  (project.testRuns || []).forEach(run => {
+    const route = routeMap.get(run.routeId);
+    const status = ({ planned: '待执行', running: '执行中', completed: '已完成', cancelled: '已取消' })[run.status] || run.status;
+    lines.push(`| ${escapeCell(run.date || '')} | ${escapeCell(run.name)} | ${escapeCell(route?.name || '')} | ${escapeCell(run.driver || '')} | ${escapeCell(run.vehicle || '')} | ${escapeCell(status)} | ${escapeCell(run.distance ? `${run.distance} km` : '')} |`);
+  });
+
+  lines.push('', '## 问题闭环', '', '| 严重度 | 问题 | 状态 | 负责人 | 路线 | 证据 |', '|---|---|---|---|---|---|');
+  if (!(project.issues || []).length) lines.push('| - | 暂无问题 | - | - | - | - |');
+  (project.issues || []).forEach(issue => {
+    const route = routeMap.get(issue.routeId);
+    lines.push(`| ${escapeCell(issue.severity)} | ${escapeCell(issue.title)} | ${escapeCell(issue.status)} | ${escapeCell(issue.assignee)} | ${escapeCell(route?.name || '')} | ${escapeCell(issue.evidence)} |`);
+  });
+
+  if ((project.milestones || []).length) {
+    lines.push('', '## 里程碑', '');
+    project.milestones.forEach(item => lines.push(`- [${item.status === 'completed' ? 'x' : ' '}] ${item.name}${item.dueDate ? `（${item.dueDate}）` : ''}${item.owner ? ` · ${item.owner}` : ''}`));
+  }
 
   if (project.notes) lines.push('', '## 项目备注', '', project.notes);
   if (profile.references.length) {

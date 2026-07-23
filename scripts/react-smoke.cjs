@@ -29,7 +29,7 @@ async function waitForServer() {
 app.whenReady().then(async () => {
   try {
     if (!useDist) await waitForServer();
-    const window = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { contextIsolation: true, sandbox: true } });
+    const window = new BrowserWindow({ show: false, width: 1440, height: 960, webPreferences: { contextIsolation: true, sandbox: true } });
     window.webContents.on('console-message', event => {
       if (event.level === 'error') errors.push(event.message);
     });
@@ -39,33 +39,50 @@ app.whenReady().then(async () => {
     });
     if (useDist) await window.loadFile(path.join(root, 'dist', 'index.html'));
     else await window.loadURL('http://127.0.0.1:4179');
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    await new Promise(resolve => setTimeout(resolve, 1200));
     const result = await window.webContents.executeJavaScript(`({
-      title: document.querySelector('.brand-copy strong')?.textContent,
-      tabs: document.querySelectorAll('.workspace-nav button').length,
-      cards: document.querySelectorAll('.card').length,
-      hasMap: Boolean(document.querySelector('.leaflet-container')),
+      title: document.querySelector('.platform-brand strong')?.textContent,
+      navItems: document.querySelectorAll('.platform-nav a').length,
+      statCards: document.querySelectorAll('.stat-card').length,
+      hasDashboard: Boolean(document.querySelector('.dashboard-page')),
       bodyText: document.body.innerText.slice(0, 300)
     })`);
-    if (result.title !== 'Global Road Test Studio') errors.push('Workbench title was not rendered');
-    if (result.tabs !== 5) errors.push(`Expected 5 workspaces, found ${result.tabs}`);
-    if (!result.cards) errors.push('No React cards rendered');
-    if (!result.hasMap) errors.push('Leaflet map did not mount');
+    if (result.title !== 'Global Road Test') errors.push('Platform brand was not rendered');
+    if (result.navItems !== 7) errors.push(`Expected 7 platform navigation items, found ${result.navItems}`);
+    if (result.statCards !== 4) errors.push(`Expected 4 dashboard stat cards, found ${result.statCards}`);
+    if (!result.hasDashboard) errors.push('Portfolio dashboard did not render');
     const interaction = await window.webContents.executeJavaScript(`(async () => {
-      document.querySelector('.template-grid button')?.click();
+      document.querySelector('.topbar-actions .primary')?.click();
       await new Promise(resolve => setTimeout(resolve, 100));
-      const projectCreated = Boolean(document.querySelector('.readiness-card'));
-      document.querySelectorAll('.workspace-nav button')[1]?.click();
+      const createPanelOpened = Boolean(document.querySelector('.create-project-panel'));
+      document.querySelector('.create-project-panel .toolbar-row .button-primary')?.click();
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const projectCreated = Boolean(document.querySelector('.project-command-strip'));
+      document.querySelectorAll('.project-tabs button')[2]?.click();
       await new Promise(resolve => setTimeout(resolve, 80));
-      const coverageOpened = document.body.innerText.includes('区域智能规划');
-      document.querySelectorAll('.workspace-nav button')[3]?.click();
+      document.querySelector('.execution-panel .card-actions .button-primary')?.click();
       await new Promise(resolve => setTimeout(resolve, 80));
-      const manualOpened = document.body.innerText.includes('手工路线');
-      return { projectCreated, coverageOpened, manualOpened };
+      const runCreated = Boolean(document.querySelector('.run-card'));
+      document.querySelectorAll('.project-tabs button')[3]?.click();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      document.querySelector('.issues-panel .card-actions .button-primary')?.click();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const issueCreated = Boolean(document.querySelector('.issue-card'));
+      document.querySelector('.platform-nav a[href="#/routes"]')?.click();
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const routeCenterOpened = Boolean(document.querySelector('.route-assets-page'));
+      const routeMapMounted = Boolean(document.querySelector('.leaflet-container'));
+      document.querySelector('.platform-nav a[href="#/planning"]')?.click();
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const planningOpened = Boolean(document.querySelector('.planning-page'));
+      return { createPanelOpened, projectCreated, runCreated, issueCreated, routeCenterOpened, routeMapMounted, planningOpened };
     })()`);
-    if (!interaction.projectCreated) errors.push('Compliance project creation failed');
-    if (!interaction.coverageOpened) errors.push('Coverage workspace switch failed');
-    if (!interaction.manualOpened) errors.push('Manual-route workspace switch failed');
+    if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
+    if (!interaction.projectCreated) errors.push('Project creation failed');
+    if (!interaction.runCreated) errors.push('Test run creation failed');
+    if (!interaction.issueCreated) errors.push('Issue creation failed');
+    if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
+    if (!interaction.planningOpened) errors.push('Planning center failed to open');
     if (errors.length) failed = true;
     process.stdout.write(`${JSON.stringify({ ...result, ...interaction, errors }, null, 2)}\n`);
     window.destroy();
