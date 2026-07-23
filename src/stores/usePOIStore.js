@@ -22,6 +22,6 @@ function loadPOIs() {
 }
 
 function commit(set, pois) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pois));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pois)); } catch { /* IndexedDB remains the durable primary store */ }
   set({ pois });
 }

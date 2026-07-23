@@ -78,7 +78,7 @@ export function loadGroups() {
 }
 
 export function saveGroups(groups) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(groups)); } catch { /* IndexedDB remains the durable primary store */ }
 }
 
 function removeLegacySampleRoutes(groups) {

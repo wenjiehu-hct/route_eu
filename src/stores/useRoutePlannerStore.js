@@ -302,7 +302,7 @@ export const useRoutePlannerStore = create((set, get) => ({
   },
   exportData: ({ pois = [], compliance = null } = {}) => {
     const routes = flattenRoutes(get().groups);
-    const payload = { version: 3, exportedAt: new Date().toISOString(), groups: clone(get().groups), pois: clone(pois), compliance: compliance ? clone(compliance) : null };
+    const payload = { version: 4, exportedAt: new Date().toISOString(), groups: clone(get().groups), pois: clone(pois), compliance: compliance ? clone(compliance) : null };
     downloadTextFile(JSON.stringify(payload, null, 2), `route-planner-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
     set({ status: `已备份 ${routes.length} 条路线、${pois.length} 个收藏点和 ${compliance?.projects?.length || 0} 个法规项目。` });
   },
@@ -312,7 +312,7 @@ export const useRoutePlannerStore = create((set, get) => ({
       try {
         const raw = JSON.parse(event.target.result);
         let groups;
-        if ([1, 2, 3].includes(raw.version) && Array.isArray(raw.groups)) groups = raw.groups;
+        if ([1, 2, 3, 4].includes(raw.version) && Array.isArray(raw.groups)) groups = raw.groups;
         else if (Array.isArray(raw)) groups = migrateImportedRoutes(raw);
         else throw new Error('文件格式不匹配');
         saveGroups(groups);

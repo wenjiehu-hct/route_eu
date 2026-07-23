@@ -407,7 +407,7 @@ function loadState() {
 }
 
 function persist(set, state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, ...state }));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, ...state })); } catch { /* IndexedDB remains the durable primary store */ }
   set(state);
 }
 

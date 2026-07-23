@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
     if (result.navItems !== 7) errors.push(`Expected 7 platform navigation items, found ${result.navItems}`);
     if (result.statCards !== 4) errors.push(`Expected 4 dashboard stat cards, found ${result.statCards}`);
     if (!result.hasDashboard) errors.push('Portfolio dashboard did not render');
-    await window.webContents.executeJavaScript(`localStorage.setItem('routePlannerVue.groups.v1', JSON.stringify([{ id: 'smoke-group', name: 'Smoke routes', expanded: true, routes: [{ id: 'route-smoke', name: 'Smoke waypoint route', color: '#2563eb', visible: true, stops: [{ name: 'A', lat: 48.13, lon: 11.57 }, { name: 'B', lat: 48.18, lon: 11.62 }], stats: { distance: 12000, duration: 900, roadTypeDistances: { primary: 12000 } } }] }]))`);
+    await window.webContents.executeJavaScript(`new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase('globalRoadTestWorkspace'); request.onsuccess = () => { localStorage.setItem('routePlannerVue.groups.v1', JSON.stringify([{ id: 'smoke-group', name: 'Smoke routes', expanded: true, routes: [{ id: 'route-smoke', name: 'Smoke waypoint route', color: '#2563eb', visible: true, stops: [{ name: 'A', lat: 48.13, lon: 11.57 }, { name: 'B', lat: 48.18, lon: 11.62 }], stats: { distance: 12000, duration: 900, roadTypeDistances: { primary: 12000 } } }] }])); resolve(true); }; request.onerror = () => reject(request.error); })`);
     const reloaded = new Promise(resolve => window.webContents.once('did-finish-load', resolve));
     window.reload();
     await reloaded;
@@ -60,6 +60,13 @@ app.whenReady().then(async () => {
       const waitFor = async selector => {
         for (let index = 0; index < 30; index += 1) {
           if (document.querySelector(selector)) return true;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return false;
+      };
+      const waitUntil = async predicate => {
+        for (let index = 0; index < 50; index += 1) {
+          if (predicate()) return true;
           await new Promise(resolve => setTimeout(resolve, 50));
         }
         return false;
@@ -127,7 +134,24 @@ app.whenReady().then(async () => {
       document.querySelector('.platform-nav a[href="#/planning"]')?.click();
       const planningOpened = await waitFor('.planning-page');
       const waypointModeDefault = document.querySelector('.planning-methods button.active strong')?.textContent?.includes('Waypoint');
-      return { createPanelOpened, projectCreated, projectReadinessVisible, readinessLayoutStable, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault };
+      document.querySelector('.platform-nav a[href="#/data"]')?.click();
+      const dataCenterOpened = await waitFor('.data-page');
+      const localDatabaseReady = Boolean(document.querySelector('.local-database-card')?.textContent?.includes('IndexedDB'));
+      const snapshotInput = document.querySelector('.snapshot-composer input');
+      if (snapshotInput) setValue(snapshotInput, 'Smoke persistence snapshot');
+      document.querySelector('.snapshot-composer .button-primary')?.click();
+      const snapshotCreated = await waitUntil(() => [...document.querySelectorAll('.snapshot-history > div')].some(row => row.textContent.includes('Smoke persistence snapshot')));
+      const localDataPersisted = await new Promise(resolve => {
+        const request = indexedDB.open('globalRoadTestWorkspace');
+        request.onsuccess = () => {
+          const db = request.result;
+          const read = db.transaction('workspace', 'readonly').objectStore('workspace').get('current');
+          read.onsuccess = () => { const payload = read.result?.payload; resolve(Boolean(payload?.groups?.some(group => group.routes?.some(route => route.id === 'route-smoke')) && payload?.compliance?.projects?.length)); db.close(); };
+          read.onerror = () => { resolve(false); db.close(); };
+        };
+        request.onerror = () => resolve(false);
+      });
+      return { createPanelOpened, projectCreated, projectReadinessVisible, readinessLayoutStable, runCreated, sessionOpened, startGuidanceVisible, startActionAvailable, runStarted, evidenceUploaded, issueCreated, routeCenterOpened, routeMapMounted, planningOpened, waypointModeDefault, dataCenterOpened, localDatabaseReady, snapshotCreated, localDataPersisted };
     })()`);
     if (!interaction.createPanelOpened) errors.push('Project creation panel failed to open');
     if (!interaction.projectCreated) errors.push('Project creation failed');
@@ -142,8 +166,23 @@ app.whenReady().then(async () => {
     if (!interaction.routeCenterOpened || !interaction.routeMapMounted) errors.push('Route asset center or map failed to mount');
     if (!interaction.planningOpened) errors.push('Planning center failed to open');
     if (!interaction.waypointModeDefault) errors.push('Waypoint planning is not the default planning mode');
+    if (!interaction.dataCenterOpened || !interaction.localDatabaseReady) errors.push('Local workspace database center failed to open');
+    if (!interaction.snapshotCreated || !interaction.localDataPersisted) errors.push('Local snapshot or IndexedDB persistence failed');
+    const persistenceReloaded = new Promise(resolve => window.webContents.once('did-finish-load', resolve));
+    window.reload();
+    await persistenceReloaded;
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const workspaceRestoredAfterReload = await window.webContents.executeJavaScript(`(async () => {
+      document.querySelector('.platform-nav a[href="#/projects"]')?.click();
+      for (let index = 0; index < 30; index += 1) {
+        if (document.querySelector('.project-table-row, .project-card')) return true;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return false;
+    })()`);
+    if (!workspaceRestoredAfterReload) errors.push('IndexedDB workspace was not restored after reload');
     if (errors.length) failed = true;
-    process.stdout.write(`${JSON.stringify({ ...result, ...interaction, errors }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ...result, ...interaction, workspaceRestoredAfterReload, errors }, null, 2)}\n`);
     window.destroy();
   } catch (error) {
     failed = true;
